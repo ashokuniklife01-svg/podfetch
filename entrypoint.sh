@@ -6,6 +6,11 @@ set -eu
 POT_HOST="${BGUTIL_POT_HOST:-127.0.0.1}"
 POT_PORT="${BGUTIL_POT_PORT:-4416}"
 POT_LOG="${BGUTIL_POT_LOG:-/tmp/bgutil/server.log}"
+DENO_DIR="${DENO_DIR:-/tmp/deno-cache}"
+
+# /tmp is often a fresh tmpfs at container start, so directories created
+# during the image build are gone. Recreate them before writing anything.
+mkdir -p /tmp/bgutil "$DENO_DIR"
 
 start_pot() {
     if [ ! -f /opt/bgutil/src/main.ts ]; then

@@ -399,13 +399,25 @@ def _client_attempts() -> list[list[str] | None]:
     return [None, *list(FALLBACK_CLIENTS)]
 
 
-def _impersonate_target() -> str | None:
-    """Chrome TLS fingerprint via curl_cffi, if that extra is installed."""
+def _impersonate_target():
+    """Chrome TLS fingerprint via curl_cffi, as a yt-dlp ImpersonateTarget.
+
+    YoutubeDL.__init__ asserts the value is an ImpersonateTarget instance; a
+    plain "chrome" string raises a bare AssertionError (empty message).
+    """
     try:
         import curl_cffi  # noqa: F401
+        from yt_dlp.networking.impersonate import ImpersonateTarget
     except Exception:
         return None
-    return os.environ.get("YT_IMPERSONATE", "chrome") or None
+    raw = os.environ.get("YT_IMPERSONATE", "chrome") or None
+    if not raw:
+        return None
+    try:
+        return ImpersonateTarget.from_str(raw)
+    except Exception as exc:
+        print(f"[podfetch] Invalid YT_IMPERSONATE={raw!r}: {exc}", flush=True)
+        return None
 
 
 def _pot_extractor_args() -> dict:
@@ -441,8 +453,18 @@ def _ydl(opts: dict, clients: list[str] | None = None) -> YoutubeDL:
     try:
         return YoutubeDL(merged)
     except Exception as exc:
-        if target and "impersonate" in (str(exc) or "").lower():
-            print(f"[podfetch] Impersonate {target!r} unavailable ({exc}); continuing without it", flush=True)
+        # yt-dlp raises a bare AssertionError (empty message) if a string
+        # is passed instead of ImpersonateTarget; also fall back if the
+        # requested target is unsupported.
+        impersonate_failed = (
+            isinstance(exc, AssertionError)
+            or "impersonate" in (str(exc) or "").lower()
+        )
+        if target and impersonate_failed:
+            print(
+                f"[podfetch] Impersonate {target!r} unavailable ({exc!r}); continuing without it",
+                flush=True,
+            )
             merged.pop("impersonate", None)
             return YoutubeDL(merged)
         raise

@@ -61,23 +61,88 @@ QUALITIES = {
     "mp3": {"label": "MP3 Audio", "height": None, "kind": "audio"},
 }
 
-# Default clients first so adaptive 720p/1080p formats stay available.
-# Later entries are tried if extraction or download fails.
+# Batches tried after yt-dlp's own defaults. JS-less clients first (they can
+# still return a player response when the JS runtime is missing), then TV and
+# web clients that usually still offer 720p/1080p.
+# Only names from yt-dlp 2026.10.26 INNERTUBE_CLIENTS are used (tv_embedded is gone).
 FALLBACK_CLIENTS = (
-    ["tv", "ios", "web_safari"],
-    ["tv_embedded", "ios", "tv"],
-    ["web", "mweb", "web_safari"],
-    ["android", "ios"],
+    ["visionos", "android_vr"],
+    ["tv_samsung", "tv", "tv_simply", "tv_downgraded"],
+    ["web_safari", "web_embedded", "mweb", "web"],
+    ["ios", "android"],
 )
 
+
+def _yt_verbose() -> bool:
+    raw = os.environ.get("YT_VERBOSE")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    # Default on in Docker / Render so we can see JS-runtime and player-client logs.
+    # The local desktop app stays quiet unless YT_VERBOSE=1 is set.
+    return bool(os.environ.get("RENDER")) or Path("/.dockerenv").exists()
+
+
+class _YtLogger:
+    """Send yt-dlp messages to stdout so Render / gunicorn capture them."""
+
+    def __init__(self, verbose: bool = False) -> None:
+        self.verbose = verbose
+
+    def _emit(self, msg: str) -> None:
+        text = str(msg).rstrip()
+        if text:
+            print(text, flush=True)
+
+    def debug(self, msg: str) -> None:
+        text = str(msg)
+        # Always keep JS-runtime / player-client / PO-token hints, even when
+        # full verbose mode is off — those are the lines that explain YouTube failures.
+        if self.verbose or any(
+            k in text
+            for k in (
+                "JS runtime",
+                "JS Challenge",
+                "player_client",
+                "player client",
+                "PO Token",
+                "pot:",
+                "[jsc]",
+                "deno",
+                "yt_dlp_ejs",
+                "ejs",
+                "player response",
+            )
+        ):
+            self._emit(text)
+
+    def info(self, msg: str) -> None:
+        self._emit(msg)
+
+    def warning(self, msg: str) -> None:
+        text = str(msg)
+        if not text.startswith("WARNING"):
+            text = f"WARNING: {text}"
+        self._emit(text)
+
+    def error(self, msg: str) -> None:
+        text = str(msg)
+        if not text.startswith("ERROR"):
+            text = f"ERROR: {text}"
+        self._emit(text)
+
+
+_YT_LOGGER = _YtLogger(verbose=_yt_verbose())
+
 YDL_BASE = {
-    "quiet": True,
-    "no_warnings": True,
+    "quiet": False,
+    "no_warnings": False,
+    "verbose": _yt_verbose(),
+    "logger": _YT_LOGGER,
     "noplaylist": True,
     "noprogress": True,
     "retries": 10,
     "fragment_retries": 10,
-    "extractor_retries": 3,
+    "extractor_retries": 2,
     "file_access_retries": 3,
     "socket_timeout": 30,
     "retry_sleep_functions": {},
@@ -274,6 +339,12 @@ def _friendly_error(exc: BaseException) -> str:
             "This often happens on shared or datacenter IPs. Try again from "
             "your own computer, or later."
         )
+    if "failed to extract any player response" in lowered:
+        return (
+            "YouTube did not return video data from this server. "
+            "The link is valid, but YouTube may be blocking this hosting network. "
+            "Try again in a moment."
+        )
     if "unsupported url" in lowered or "no video" in lowered:
         return "Could not find a YouTube video at that link."
     last = text.strip().splitlines()[-1]
@@ -308,25 +379,57 @@ def _speed_opts(use_aria2c: bool = True) -> dict:
     return opts
 
 
+def _js_runtimes() -> dict:
+    """Prefer Deno (yt-dlp's default), and also enable Node if it is on PATH."""
+    runtimes: dict = {"deno": {}}
+    deno = shutil.which("deno")
+    if deno:
+        runtimes["deno"] = {"path": deno}
+    node = shutil.which("node")
+    if node:
+        runtimes["node"] = {"path": node}
+    return runtimes
+
+
+def _client_label(clients: list[str] | None) -> str:
+    return "default" if not clients else ",".join(clients)
+
+
+def _client_attempts() -> list[list[str] | None]:
+    return [None, *list(FALLBACK_CLIENTS)]
+
+
 def _ydl(opts: dict, clients: list[str] | None = None) -> YoutubeDL:
     merged = {**YDL_BASE, **_speed_opts(use_aria2c=bool(opts.get("_use_aria2c", True))), **opts}
     merged.pop("_use_aria2c", None)
+    merged.setdefault("js_runtimes", _js_runtimes())
+    merged.setdefault("logger", _YT_LOGGER)
     if clients:
-        merged["extractor_args"] = {"youtube": {"player_client": clients}}
+        ea = {}
+        for key, value in (merged.get("extractor_args") or {}).items():
+            ea[key] = dict(value) if isinstance(value, dict) else value
+        youtube = dict(ea.get("youtube") or {})
+        youtube["player_client"] = list(clients)
+        ea["youtube"] = youtube
+        merged["extractor_args"] = ea
     return YoutubeDL(merged)
 
 
 def _call_ydl(opts: dict, fn, *, use_aria2c: bool = True):
     """Run a yt-dlp operation, retrying with other player clients if it fails."""
     last_exc: BaseException | None = None
-    attempts: list[list[str] | None] = [None, *list(FALLBACK_CLIENTS)]
     opts = {**opts, "_use_aria2c": use_aria2c}
-    for clients in attempts:
+    for clients in _client_attempts():
+        label = _client_label(clients)
+        print(f"[podfetch] YouTube download attempt with player clients: {label}", flush=True)
         try:
             with _ydl(opts, clients=clients) as ydl:
-                return fn(ydl)
+                result = fn(ydl)
+            print(f"[podfetch] YouTube download succeeded with player clients: {label}", flush=True)
+            return result
         except Exception as exc:
             last_exc = exc
+            print(f"[podfetch] YouTube download failed with {label}: {exc}", flush=True)
             if _is_permanent_error(exc):
                 raise
             continue
@@ -339,23 +442,37 @@ def _extract_info(url: str) -> dict:
     best = None
     best_q = -1
     last_exc: BaseException | None = None
-    attempts: list[list[str] | None] = [None, ["tv", "ios", "web_safari"], ["tv_embedded", "ios"]]
-    for clients in attempts:
+    for clients in _client_attempts():
+        label = _client_label(clients)
+        print(f"[podfetch] YouTube info attempt with player clients: {label}", flush=True)
         try:
             with _ydl({"skip_download": True, "_use_aria2c": False}, clients=clients) as ydl:
                 info = ydl.extract_info(url, download=False)
             if not info:
+                print(f"[podfetch] YouTube info: {label} returned no data", flush=True)
                 continue
             if info.get("_type") == "playlist" and info.get("entries"):
                 info = info["entries"][0] or info
             qualities = _available_qualities(info)
             max_q = max(qualities) if qualities else 0
+            print(
+                f"[podfetch] YouTube info succeeded with {label}: "
+                f"id={info.get('id')} max_height={max_q or 0} title={info.get('title')!r}",
+                flush=True,
+            )
             if max_q > best_q:
                 best, best_q = info, max_q
             if max_q >= 1080:
                 return info
+            # Default / TV / web / visionos / android_vr clients already return
+            # the full format catalog. Further batches (especially ios/android)
+            # will not reveal a higher resolution and just slow the request down.
+            limited = clients is not None and all(c in {"ios", "android"} for c in clients)
+            if best_q > 0 and not limited:
+                return best
         except Exception as exc:
             last_exc = exc
+            print(f"[podfetch] YouTube info failed with {label}: {exc}", flush=True)
             if _is_permanent_error(exc):
                 raise
             continue
@@ -1281,6 +1398,56 @@ def _should_skip_yt_dlp_update() -> bool:
     if Path("/.dockerenv").exists():
         return True
     return False
+
+
+def _log_runtime_diagnostics() -> None:
+    """Print yt-dlp / JS-runtime status once at process start (gunicorn imports this module)."""
+    try:
+        import yt_dlp
+        print(f"[podfetch] yt-dlp {yt_dlp.version.__version__}", flush=True)
+    except Exception as exc:
+        print(f"[podfetch] yt-dlp import failed: {exc}", flush=True)
+    try:
+        import yt_dlp_ejs  # type: ignore
+        version = getattr(yt_dlp_ejs, "__version__", None)
+        if version is None:
+            try:
+                from importlib.metadata import version as pkg_version
+                version = pkg_version("yt-dlp-ejs")
+            except Exception:
+                version = "present"
+        print(f"[podfetch] yt-dlp-ejs {version}", flush=True)
+    except Exception as exc:
+        print(f"[podfetch] yt-dlp-ejs not available: {exc}", flush=True)
+    for name in ("deno", "node", "ffmpeg", "ffprobe"):
+        path = shutil.which(name)
+        if not path:
+            print(f"[podfetch] {name}: not on PATH", flush=True)
+            continue
+        try:
+            proc = subprocess.run(
+                [path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
+            )
+            line = (proc.stdout or proc.stderr or "").strip().splitlines()
+            ver = line[0] if line else f"exit {proc.returncode}"
+            print(f"[podfetch] {name}: {path} ({ver})", flush=True)
+        except Exception as exc:
+            print(f"[podfetch] {name}: {path} (version check failed: {exc})", flush=True)
+    print(
+        f"[podfetch] js_runtimes={_js_runtimes()} YT_VERBOSE={_yt_verbose()} "
+        f"YT_SKIP_UPDATE={os.environ.get('YT_SKIP_UPDATE')!r} RENDER={os.environ.get('RENDER')!r}",
+        flush=True,
+    )
+
+
+try:
+    _log_runtime_diagnostics()
+except Exception as exc:
+    print(f"[podfetch] Runtime diagnostics failed: {exc}", flush=True)
 
 
 def main() -> None:

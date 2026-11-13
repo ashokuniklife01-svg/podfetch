@@ -4,6 +4,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     YT_SKIP_UPDATE=1 \
+    YT_VERBOSE=1 \
+    DENO_DIR=/tmp/deno-cache \
+    DENO_NO_PROMPT=1 \
+    DENO_NO_UPDATE_CHECK=1 \
     PORT=10000
 
 RUN apt-get update \
@@ -12,6 +16,7 @@ RUN apt-get update \
 
 # yt-dlp needs a JavaScript runtime to solve YouTube's player challenges.
 COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+RUN chmod +x /usr/local/bin/deno && deno --version
 
 WORKDIR /app
 
@@ -24,8 +29,8 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn \
 COPY . .
 
 RUN useradd --create-home --uid 1000 appuser \
-    && mkdir -p /tmp/yt-downloader-jobs \
-    && chown -R appuser:appuser /app /tmp/yt-downloader-jobs
+    && mkdir -p /tmp/yt-downloader-jobs "$DENO_DIR" \
+    && chown -R appuser:appuser /app /tmp/yt-downloader-jobs "$DENO_DIR"
 USER appuser
 
 EXPOSE 10000

@@ -399,20 +399,53 @@ def _client_attempts() -> list[list[str] | None]:
     return [None, *list(FALLBACK_CLIENTS)]
 
 
+def _impersonate_target() -> str | None:
+    """Chrome TLS fingerprint via curl_cffi, if that extra is installed."""
+    try:
+        import curl_cffi  # noqa: F401
+    except Exception:
+        return None
+    return os.environ.get("YT_IMPERSONATE", "chrome") or None
+
+
+def _pot_extractor_args() -> dict:
+    """Point the bgutil HTTP plugin at the loopback POT server started by entrypoint.sh."""
+    host = os.environ.get("BGUTIL_POT_HOST", "127.0.0.1")
+    port = os.environ.get("BGUTIL_POT_PORT", "4416")
+    return {"youtubepot-bgutilhttp": {"base_url": [f"http://{host}:{port}"]}}
+
+
+def _merge_extractor_args(base: dict | None, clients: list[str] | None) -> dict:
+    ea: dict = {}
+    for key, value in (base or {}).items():
+        ea[key] = dict(value) if isinstance(value, dict) else value
+    if clients:
+        youtube = dict(ea.get("youtube") or {})
+        youtube["player_client"] = list(clients)
+        ea["youtube"] = youtube
+    for key, value in _pot_extractor_args().items():
+        ea.setdefault(key, value)
+    return ea
+
+
 def _ydl(opts: dict, clients: list[str] | None = None) -> YoutubeDL:
     merged = {**YDL_BASE, **_speed_opts(use_aria2c=bool(opts.get("_use_aria2c", True))), **opts}
     merged.pop("_use_aria2c", None)
     merged.setdefault("js_runtimes", _js_runtimes())
     merged.setdefault("logger", _YT_LOGGER)
-    if clients:
-        ea = {}
-        for key, value in (merged.get("extractor_args") or {}).items():
-            ea[key] = dict(value) if isinstance(value, dict) else value
-        youtube = dict(ea.get("youtube") or {})
-        youtube["player_client"] = list(clients)
-        ea["youtube"] = youtube
-        merged["extractor_args"] = ea
-    return YoutubeDL(merged)
+    merged["extractor_args"] = _merge_extractor_args(merged.get("extractor_args"), clients)
+    target = _impersonate_target()
+    if target and "impersonate" not in merged:
+        merged["impersonate"] = target
+        print(f"[podfetch] Using TLS impersonation: {target}", flush=True)
+    try:
+        return YoutubeDL(merged)
+    except Exception as exc:
+        if target and "impersonate" in (str(exc) or "").lower():
+            print(f"[podfetch] Impersonate {target!r} unavailable ({exc}); continuing without it", flush=True)
+            merged.pop("impersonate", None)
+            return YoutubeDL(merged)
+        raise
 
 
 def _call_ydl(opts: dict, fn, *, use_aria2c: bool = True):
@@ -1437,6 +1470,26 @@ def _log_runtime_diagnostics() -> None:
             print(f"[podfetch] {name}: {path} ({ver})", flush=True)
         except Exception as exc:
             print(f"[podfetch] {name}: {path} (version check failed: {exc})", flush=True)
+    try:
+        import curl_cffi  # type: ignore
+        print(f"[podfetch] curl_cffi {getattr(curl_cffi, '__version__', 'present')}", flush=True)
+    except Exception as exc:
+        print(f"[podfetch] curl_cffi not available: {exc}", flush=True)
+    try:
+        from importlib.metadata import version as pkg_version
+        print(f"[podfetch] bgutil-ytdlp-pot-provider {pkg_version('bgutil-ytdlp-pot-provider')}", flush=True)
+    except Exception as exc:
+        print(f"[podfetch] bgutil-ytdlp-pot-provider not installed: {exc}", flush=True)
+    try:
+        import socket
+        host = os.environ.get("BGUTIL_POT_HOST", "127.0.0.1")
+        port = int(os.environ.get("BGUTIL_POT_PORT", "4416"))
+        s = socket.create_connection((host, port), 1.0)
+        s.close()
+        print(f"[podfetch] bgutil POT server reachable at {host}:{port}", flush=True)
+    except Exception as exc:
+        print(f"[podfetch] bgutil POT server not reachable: {exc}", flush=True)
+    print(f"[podfetch] impersonate_target={_impersonate_target()!r}", flush=True)
     print(
         f"[podfetch] js_runtimes={_js_runtimes()} YT_VERBOSE={_yt_verbose()} "
         f"YT_SKIP_UPDATE={os.environ.get('YT_SKIP_UPDATE')!r} RENDER={os.environ.get('RENDER')!r}",

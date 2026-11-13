@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PodFetch — YouTube, Instagram &amp; Facebook</title>
+  <meta name="color-scheme" content="dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --bg-2: #12141b;
+      --card: #171a22;
+      --line: rgba(255,255,255,0.08);
+      --text: #f4f1ea;
+      --muted: #9a958a;
+      --accent: #e8b86d;
+      --accent-2: #f0d3a0;
+      --danger: #ff8a7a;
+      --ok: #8fd9a8;
+      --shadow: 0 30px 80px rgba(0,0,0,0.45);
+      --radius: 22px;
+      --yt: #ff3b30;
+      --ig: #dd2a7b;
+      --fb: #1877f2;
+      --wa: #25d366;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: "Instrument Sans", system-ui, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(232,184,109,0.14), transparent 55%),
+        radial-gradient(900px 500px at -10% 110%, rgba(120,90,255,0.12), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      width: min(760px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 80px;
+    }
+    header { margin-bottom: 28px; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+    h1 {
+      font-size: clamp(32px, 6vw, 48px);
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin: 0 0 10px;
+      font-weight: 700;
+    }
+    .lede {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16.5px;
+      line-height: 1.5;
+      max-width: 42em;
+    }
+    .screen { display: none; }
+    .screen.show { display: block; }
+    .back {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: transparent;
+      color: var(--muted);
+      font: 600 14px/1 "Instrument Sans", system-ui, sans-serif;
+      padding: 0 0 16px;
+      cursor: pointer;
+      border: 0;
+    }
+    .back:hover { color: var(--text); }
+    .cards {
+      display: grid;
+      gap: 14px;
+    }
+    .plat {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 22px 20px;
+      color: #fff;
+      overflow: hidden;
+      min-height: 118px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      transition: transform .15s ease, filter .15s ease;
+    }
+    .plat:hover { transform: translateY(-2px); filter: brightness(1.05); }
+    .plat.yt { background: linear-gradient(135deg, #ff4d3d 0%, #c40000 70%); }
+    .plat.ig { background: linear-gradient(135deg, #f58529 0%, #dd2a7b 48%, #8134af 76%, #515bd4 100%); }
+    .plat.fb { background: linear-gradient(135deg, #4b9bff 0%, #1877f2 55%, #0d5fce 100%); }
+    .plat.wa {
+      min-height: 88px;
+      background: linear-gradient(135deg, #3ce07a 0%, #128c44 100%);
+      padding: 16px 20px;
+    }
+    .plat .icon {
+      width: 64px; height: 64px;
+      flex: 0 0 64px;
+      border-radius: 18px;
+      background: rgba(0,0,0,0.2);
+      display: grid;
+      place-items: center;
+    }
+    .plat.wa .icon { width: 48px; height: 48px; flex-basis: 48px; border-radius: 14px; }
+    .plat .label { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 4px; }
+    .plat.wa .label { font-size: 20px; }
+    .plat .hint { margin: 0; opacity: 0.88; font-size: 14px; }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(8px);
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 14px 14px 0;
+    }
+    .chip {
+      background: #10131a;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: 600 14px/1 "Instrument Sans", system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .chip[aria-pressed="true"] {
+      background: var(--accent);
+      color: #1a1308;
+      border-color: transparent;
+    }
+    form.fetch {
+      display: flex;
+      gap: 10px;
+      padding: 14px;
+      background: var(--card);
+    }
+    input[type="url"] {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid var(--line);
+      background: #0e1016;
+      color: var(--text);
+      border-radius: 14px;
+      padding: 16px 16px;
+      font: 500 16px/1.3 "Instrument Sans", system-ui, sans-serif;
+      outline: none;
+    }
+    input[type="url"]:focus {
+      border-color: rgba(232,184,109,0.55);
+      box-shadow: 0 0 0 4px rgba(232,184,109,0.12);
+    }
+    button { font-family: inherit; cursor: pointer; border: 0; }
+    .btn-primary {
+      background: var(--accent);
+      color: #1a1308;
+      font-weight: 700;
+      border-radius: 14px;
+      padding: 0 20px;
+      white-space: nowrap;
+      font-size: 15px;
+      transition: transform .15s ease, filter .15s ease;
+    }
+    .btn-primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.6; cursor: wait; transform: none; }
+    .result { display: none; padding: 18px; }
+    .result.show { display: block; }
+    .meta {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 20px;
+    }
+    .thumb-wrap {
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 16/9;
+    }
+    .thumb-wrap.portrait { aspect-ratio: 9/16; max-height: 260px; }
+    .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .badge {
+      position: absolute;
+      left: 8px; bottom: 8px;
+      background: rgba(0,0,0,0.72);
+      color: #fff;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 11px;
+      padding: 3px 7px;
+      border-radius: 6px;
+    }
+    .info h2 {
+      margin: 2px 0 8px;
+      font-size: 22px;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+    }
+    .sub { color: var(--muted); font-size: 14px; margin: 0; }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .dl {
+      background: #10131a;
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 16px;
+      padding: 16px 14px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: border-color .15s ease, transform .15s ease, background .15s ease;
+    }
+    .dl:hover { border-color: rgba(232,184,109,0.5); transform: translateY(-1px); background: #161a24; }
+    .dl:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .dl .q { font-weight: 700; font-size: 16px; }
+    .dl .hint { color: var(--muted); font-size: 12px; }
+    .dl.audio { border-color: rgba(143,217,168,0.25); }
+    .items { display: grid; gap: 14px; }
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      background: #10131a;
+    }
+    .item .row {
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: 12px;
+      margin-bottom: 10px;
+      align-items: start;
+    }
+    .item .thumb {
+      width: 96px; height: 96px;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+    }
+    .item .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .item h3 { margin: 0 0 4px; font-size: 15px; }
+    .routed {
+      display: none;
+      margin: 0 14px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(232,184,109,0.1);
+      border: 1px solid rgba(232,184,109,0.28);
+      color: var(--accent-2);
+      font-size: 13px;
+    }
+    .routed.show { display: block; }
+    .login-note {
+      display: none;
+      margin: 0 14px 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(232,184,109,0.08);
+      border: 1px solid rgba(232,184,109,0.3);
+      color: var(--accent-2);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .login-note.show { display: block; }
+    .howto {
+      padding: 20px 18px 8px;
+    }
+    .howto h2 { margin: 0 0 10px; font-size: 22px; letter-spacing: -0.03em; }
+    .howto p, .howto li { color: var(--muted); font-size: 15px; line-height: 1.55; }
+    .howto ol { margin: 0; padding-left: 1.2em; }
+    .howto li { margin: 0 0 8px; color: var(--text); }
+    .howto .tag {
+      display: inline-block;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--wa);
+      margin-bottom: 6px;
+    }
+    .status {
+      display: none;
+      margin-top: 16px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      background: #10131a;
+      border: 1px solid var(--line);
+    }
+    .status.show { display: block; }
+    .status.error { border-color: rgba(255,138,122,0.4); color: var(--danger); }
+    .status.note { border-color: rgba(232,184,109,0.35); color: var(--accent-2); }
+    .bar {
+      margin-top: 10px;
+      height: 7px;
+      background: #0b0d12;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar > span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #c9934a, var(--accent-2));
+      transition: width .25s ease;
+    }
+    .status-msg { margin: 0; font-size: 14px; }
+    .foot {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 12.5px;
+      line-height: 1.5;
+    }
+    .alert {
+      display: none;
+      margin: 0 14px 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255,138,122,0.08);
+      border: 1px solid rgba(255,138,122,0.3);
+      color: var(--danger);
+      font-size: 14px;
+    }
+    .alert.show { display: block; }
+    @media (max-width: 640px) {
+      .wrap { width: min(100%, calc(100% - 20px)); padding-top: 22px; }
+      form.fetch { flex-direction: column; }
+      .btn-primary { height: 50px; }
+      .meta { grid-template-columns: 1fr; }
+      .actions { grid-template-columns: 1fr 1fr; }
+      .plat { min-height: 104px; }
+      .plat .label { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="screen show" id="screen-home">
+      <header>
+        <div class="eyebrow"><span class="dot"></span> Personal downloader</div>
+        <h1>Choose a platform.</h1>
+        <p class="lede">Paste a public YouTube, Instagram, or Facebook link and save a clean copy — video, photo, or MP3. Built for creators who already have the right to download the file.</p>
+      </header>
+      <div class="cards">
+        <button class="plat yt" type="button" data-go="youtube">
+          <span class="icon" aria-hidden="true">
+            <svg width="34" height="24" viewBox="0 0 34 24" fill="none"><rect width="34" height="24" rx="6" fill="#fff"/><path d="M13.5 7.2v9.6L24 12 13.5 7.2z" fill="#ff0000"/></svg>
+          </span>
+          <span>
+            <p class="label">YouTube</p>
+            <p class="hint">Videos, Shorts, and MP3 audio</p>
+          </span>
+        </button>
+        <button class="plat ig" type="button" data-go="instagram">
+          <span class="icon" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="#fff" stroke-width="1.8"/><circle cx="12" cy="12" r="4.2" stroke="#fff" stroke-width="1.8"/><circle cx="17.2" cy="6.8" r="1.1" fill="#fff"/></svg>
+          </span>
+          <span>
+            <p class="label">Instagram</p>
+            <p class="hint">Reels, posts, carousels, and stories</p>
+          </span>
+        </button>
+        <button class="plat fb" type="button" data-go="facebook">
+          <span class="icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="#fff"><path d="M14.7 8.5H17V5h-2.5C11.6 5 10 6.8 10 9.4V11H8v3.5h2V21h3.5v-6.5H16L17 11h-3.5V9.5c0-.6.4-1 1.2-1z"/></svg>
+          </span>
+          <span>
+            <p class="label">Facebook</p>
+            <p class="hint">Reels, videos, posts, and stories</p>
+          </span>
+        </button>
+        <button class="plat wa" type="button" data-go="whatsapp">
+          <span class="icon" aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M12.04 4.5A7.5 7.5 0 0 0 5.3 15.3L4.5 19.5l4.3-.8A7.5 7.5 0 1 0 12.04 4.5zm4.3 10.6c-.18.5-1.05.96-1.46 1.02-.37.05-.85.08-1.37-.09-.32-.1-.72-.23-1.25-.45-2.2-.95-3.63-3.16-3.74-3.3-.1-.15-.92-1.22-.92-2.33 0-1.1.58-1.65.78-1.87.2-.22.44-.28.58-.28h.42c.14 0 .32 0 .49.38.18.4.6 1.47.66 1.58.05.1.09.23.02.37-.07.15-.1.23-.2.36-.1.12-.21.27-.3.36-.1.1-.2.21-.08.43.07.22.32.75.68 1.21.47.6 1.03 1.03 1.48 1.3.12.07.27.06.37-.04.1-.1.44-.5.56-.68.12-.17.24-.14.4-.08.17.06 1.06.5 1.24.59.18.09.3.13.34.2.05.08.05.45-.13.95z"/></svg>
+          </span>
+          <span>
+            <p class="label">WhatsApp Status</p>
+            <p class="hint">How to save a status from your phone</p>
+          </span>
+        </button>
+      </div>
+      <p class="foot">For personal use of public media you own or have the right to download. Private or login-only content cannot be fetched unless you add your own cookies file. Temporary files are deleted after the download finishes.</p>
+    </section>
+
+    <section class="screen" id="screen-youtube">
+      <button class="back" type="button" data-go="home">← Back</button>
+      <header>
+        <div class="eyebrow"><span class="dot"></span> YouTube</div>
+        <h1>Paste a YouTube link.<br>Download the file you need.</h1>
+        <p class="lede">Public videos — 1080p, 720p, 360p, or MP3 audio — without extra steps.</p>
+      </header>
+      <div class="card" id="yt-card">
+        <p class="routed" id="yt-routed"></p>
+        <form class="fetch" id="yt-form" autocomplete="off">
+          <input type="url" id="yt-url" name="url" required placeholder="https://www.youtube.com/watch?v=…" inputmode="url" spellcheck="false">
+          <button class="btn-primary" id="yt-go" type="submit">Get video</button>
+        </form>
+        <div class="alert" id="yt-alert" role="alert"></div>
+        <div class="result" id="yt-result">
+          <div class="meta">
+            <div class="thumb-wrap">
+              <img id="yt-thumb" alt="Video thumbnail">
+              <span class="badge" id="yt-duration"></span>
+            </div>
+            <div class="info">
+              <h2 id="yt-title">Title</h2>
+              <p class="sub" id="yt-sub"></p>
+            </div>
+          </div>
+          <div class="actions" id="yt-actions">
+            <button class="dl" data-quality="1080" type="button">
+              <span class="q">1080p MP4</span>
+              <span class="hint" data-hint>Best quality video</span>
+            </button>
+            <button class="dl" data-quality="720" type="button">
+              <span class="q">720p MP4</span>
+              <span class="hint" data-hint>Good for most screens</span>
+            </button>
+            <button class="dl" data-quality="360" type="button">
+              <span class="q">360p MP4</span>
+              <span class="hint" data-hint>Smaller file, quicker</span>
+            </button>
+            <button class="dl audio" data-quality="mp3" type="button">
+              <span class="q">MP3 audio</span>
+              <span class="hint">192 kbps or better</span>
+            </button>
+          </div>
+          <div class="status" id="yt-status">
+            <p class="status-msg" id="yt-statusMsg">Preparing…</p>
+            <div class="bar"><span id="yt-bar"></span></div>
+          </div>
+        </div>
+      </div>
+      <p class="foot">For personal use of videos you own or have the right to download. Private or restricted videos cannot be fetched. Temporary files are deleted after the download finishes.</p>
+    </section>
+
+    <section class="screen" id="screen-instagram">
+      <button class="back" type="button" data-go="home">← Back</button>
+      <header>
+        <div class="eyebrow"><span class="dot"></span> Instagram</div>
+        <h1>Reels, posts, and stories.</h1>
+        <p class="lede">Paste a public Instagram link. Carousel posts show every photo and video so you can save each one.</p>
+      </header>
+      <div class="card">
+        <div class="chips" role="tablist" aria-label="Instagram type">
+          <button class="chip" type="button" data-platform="instagram" data-kind="reel" aria-pressed="true">Reel</button>
+          <button class="chip" type="button" data-platform="instagram" data-kind="post" aria-pressed="false">Post</button>
+          <button class="chip" type="button" data-platform="instagram" data-kind="story" aria-pressed="false">Story</button>
+        </div>
+        <p class="routed" id="ig-routed"></p>
+        <p class="login-note" id="ig-login"></p>
+        <form class="fetch" id="ig-form" autocomplete="off">
+          <input type="url" id="ig-url" name="url" required placeholder="https://www.instagram.com/reel/…" inputmode="url" spellcheck="false">
+          <button class="btn-primary" id="ig-go" type="submit">Get media</button>
+        </form>
+        <div class="alert" id="ig-alert" role="alert"></div>
+        <div class="result" id="ig-result"></div>
+      </div>
+      <p class="foot">Stories need a logged-in Instagram account. If you have the right to view them, export a Netscape cookies file and save it as cookies/instagram.txt. This app will not bypass the login.</p>
+    </section>
+
+    <section class="screen" id="screen-facebook">
+      <button class="back" type="button" data-go="home">← Back</button>
+      <header>
+        <div class="eyebrow"><span class="dot"></span> Facebook</div>
+        <h1>Reels, videos, posts, and stories.</h1>
+        <p class="lede">Works with facebook.com, fb.watch, and m.facebook.com links to public videos and photos.</p>
+      </header>
+      <div class="card">
+        <div class="chips" role="tablist" aria-label="Facebook type">
+          <button class="chip" type="button" data-platform="facebook" data-kind="reel" aria-pressed="true">Reel</button>
+          <button class="chip" type="button" data-platform="facebook" data-kind="video" aria-pressed="false">Video</button>
+          <button class="chip" type="button" data-platform="facebook" data-kind="post" aria-pressed="false">Post</button>
+          <button class="chip" type="button" data-platform="facebook" data-kind="story" aria-pressed="false">Story</button>
+        </div>
+        <p class="routed" id="fb-routed"></p>
+        <p class="login-note" id="fb-login"></p>
+        <form class="fetch" id="fb-form" autocomplete="off">
+          <input type="url" id="fb-url" name="url" required placeholder="https://www.facebook.com/reel/…" inputmode="url" spellcheck="false">
+          <button class="btn-primary" id="fb-go" type="submit">Get media</button>
+        </form>
+        <div class="alert" id="fb-alert" role="alert"></div>
+        <div class="result" id="fb-result"></div>
+      </div>
+      <p class="foot">Stories need a logged-in Facebook account. If you have the right to view them, export a Netscape cookies file and save it as cookies/facebook.txt. This app will not bypass the login.</p>
+    </section>
+
+    <section class="screen" id="screen-whatsapp">
+      <button class="back" type="button" data-go="home">← Back</button>
+      <header>
+        <div class="eyebrow"><span class="dot"></span> WhatsApp</div>
+        <h1>How to save a Status.</h1>
+        <p class="lede">A website cannot reach the statuses on your phone. Use these steps on the device where you already watched the Status.</p>
+      </header>
+      <div class="card howto">
+        <div class="tag">Android</div>
+        <h2>From Files, or share it</h2>
+        <ol>
+          <li>Open <strong>Files</strong> (or any file manager) and go to <strong>WhatsApp → Media → .Statuses</strong>. Recent statuses you have already opened are often stored there for a short time. Copy the photo or video somewhere safe.</li>
+          <li>Or open the Status in WhatsApp, tap <strong>Share</strong> or <strong>Forward</strong>, and send it to yourself (or to Saved messages / a personal chat).</li>
+        </ol>
+        <div class="tag" style="margin-top:18px">iPhone</div>
+        <h2>Forward, or screen record</h2>
+        <ol>
+          <li>Open the Status and use <strong>Forward</strong> to send it to yourself.</li>
+          <li>If there is no forward option, use iOS <strong>Screen Recording</strong> (Control Center) while the Status plays, or take a screenshot for a photo Status.</li>
+        </ol>
+        <p>WhatsApp only keeps a Status for 24 hours. Save it while it is still visible. This app does not download WhatsApp statuses from a link.</p>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const PODFETCH = {
+      instagramCookies: {{ instagram_cookies | tojson }},
+      facebookCookies: {{ facebook_cookies | tojson }}
+    };
+
+    const STORY_MSG = {
+      instagram: "Instagram stories need a logged-in account. To enable them, export a Netscape cookies file from your browser while you are logged in, and save it as cookies/instagram.txt. This app will not bypass the login.",
+      facebook: "Facebook stories need a logged-in account. To enable them, export a Netscape cookies file from your browser while you are logged in, and save it as cookies/facebook.txt. This app will not bypass the login."
+    };
+
+    const screens = ["home", "youtube", "instagram", "facebook", "whatsapp"];
+    let currentScreen = "home";
+    let kinds = { instagram: "reel", facebook: "reel" };
+    let current = { youtube: null, instagram: null, facebook: null };
+    let pollTimer = null;
+
+    function $(id) { return document.getElementById(id); }
+
+    function showScreen(name) {
+      if (!screens.includes(name)) name = "home";
+      currentScreen = name;
+      screens.forEach((s) => $("screen-" + s).classList.toggle("show", s === name));
+      const hash = name === "home" ? "" : "#" + name;
+      if (location.hash.replace("#", "") !== (hash ? name : "")) {
+        history.replaceState(null, "", hash || location.pathname);
+      }
+      if (name === "instagram" || name === "facebook") refreshLoginNote(name);
+    }
+
+    function refreshLoginNote(platform) {
+      const note = $(platform === "instagram" ? "ig-login" : "fb-login");
+      const has = platform === "instagram" ? PODFETCH.instagramCookies : PODFETCH.facebookCookies;
+      if (kinds[platform] === "story" && !has) {
+        note.textContent = STORY_MSG[platform];
+        note.classList.add("show");
+      } else {
+        note.textContent = "";
+        note.classList.remove("show");
+      }
+    }
+
+    function setKind(platform, kind) {
+      kinds[platform] = kind;
+      document.querySelectorAll('.chip[data-platform="' + platform + '"]').forEach((chip) => {
+        chip.setAttribute("aria-pressed", chip.dataset.kind === kind ? "true" : "false");
+      });
+      const input = $(platform === "instagram" ? "ig-url" : "fb-url");
+      if (input) {
+        const placeholders = {
+          instagram: { reel: "https://www.instagram.com/reel/…", post: "https://www.instagram.com/p/…", story: "https://www.instagram.com/stories/…" },
+          facebook: { reel: "https://www.facebook.com/reel/…", video: "https://www.facebook.com/watch?v=…", post: "https://www.facebook.com/…/posts/…", story: "https://www.facebook.com/stories/…" }
+        };
+        input.placeholder = (placeholders[platform] || {})[kind] || input.placeholder;
+      }
+      refreshLoginNote(platform);
+    }
+
+    function showAlert(prefix, msg) {
+      const el = $(prefix + "-alert");
+      el.textContent = msg || "";
+      el.classList.toggle("show", !!msg);
+    }
+
+    function showRouted(prefix, msg) {
+      const el = $(prefix + "-routed");
+      if (!el) return;
+      el.textContent = msg || "";
+      el.classList.toggle("show", !!msg);
+    }
+
+    function showStatus(prefix, msg, kind, pct) {
+      const box = $(prefix + "-status");
+      const statusMsg = $(prefix + "-statusMsg");
+      const bar = $(prefix + "-bar");
+      if (!box) return;
+      box.classList.add("show");
+      box.className = "status show" + (kind ? " " + kind : "");
+      statusMsg.textContent = msg;
+      if (typeof pct === "number") bar.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    }
+
+    function hideStatus(prefix) {
+      const box = $(prefix + "-status");
+      const bar = $(prefix + "-bar");
+      if (!box) return;
+      box.classList.remove("show", "error", "note");
+      if (bar) bar.style.width = "0%";
+    }
+
+    function platformLabel(p) {
+      return ({ youtube: "YouTube", instagram: "Instagram", facebook: "Facebook" })[p] || p;
+    }
+
+    function allDlButtons() {
+      return document.querySelectorAll(".dl");
+    }
+
+    function renderYoutube(data, pasted) {
+      current.youtube = data;
+      current.youtube.url = data.canonical_url || pasted;
+      $("yt-title").textContent = data.title;
+      $("yt-thumb").src = data.thumbnail || "";
+      $("yt-duration").textContent = data.duration_text || "";
+      $("yt-duration").style.display = data.duration_text ? "block" : "none";
+      const bits = [];
+      if (data.uploader) bits.push(data.uploader);
+      if (data.max_height) bits.push("up to " + data.max_height + "p");
+      $("yt-sub").textContent = bits.join(" · ");
+      document.querySelectorAll("#yt-actions .dl").forEach((btn) => {
+        const q = btn.dataset.quality;
+        const meta = (data.qualities || {})[q];
+        const hint = btn.querySelector("[data-hint]");
+        btn.disabled = false;
+        if (q !== "mp3" && meta && !meta.available) {
+          if (hint) hint.textContent = data.max_height
+            ? "Not available — will use " + data.max_height + "p"
+            : "Will use the best available quality";
+        } else if (hint && q === "1080") {
+          hint.textContent = "Best quality video";
+        } else if (hint && q === "720") {
+          hint.textContent = "Good for most screens";
+        } else if (hint && q === "360") {
+          hint.textContent = "Smaller file, quicker";
+        }
+      });
+      $("yt-result").classList.add("show");
+    }
+
+    function itemButtons(platform, item) {
+      if (item.type === "photo") {
+        return `<button class="dl" data-quality="jpg" data-index="${item.index}" type="button">
+          <span class="q">JPG photo</span>
+          <span class="hint">Original image</span>
+        </button>`;
+      }
+      if (platform === "facebook") {
+        return `
+          <button class="dl" data-quality="hd" data-index="${item.index}" type="button">
+            <span class="q">HD MP4</span>
+            <span class="hint">${item.max_height ? "Up to " + item.max_height + "p" : "Best available video"}</span>
+          </button>
+          <button class="dl" data-quality="sd" data-index="${item.index}" type="button">
+            <span class="q">SD MP4</span>
+            <span class="hint">Smaller file</span>
+          </button>
+          <button class="dl audio" data-quality="mp3" data-index="${item.index}" type="button">
+            <span class="q">MP3 audio</span>
+            <span class="hint">192 kbps or better</span>
+          </button>`;
+      }
+      return `
+        <button class="dl" data-quality="mp4" data-index="${item.index}" type="button">
+          <span class="q">MP4 video</span>
+          <span class="hint">Best available quality</span>
+        </button>
+        <button class="dl audio" data-quality="mp3" data-index="${item.index}" type="button">
+          <span class="q">MP3 audio</span>
+          <span class="hint">192 kbps or better</span>
+        </button>`;
+    }
+
+    function renderSocial(platform, data) {
+      current[platform] = data;
+      const prefix = platform === "instagram" ? "ig" : "fb";
+      const box = $(prefix + "-result");
+      const items = data.items || [];
+      const bits = [];
+      if (data.uploader) bits.push(data.uploader);
+      if (items.length > 1) bits.push(items.length + " items");
+      const heading = `<div class="info" style="margin-bottom:14px">
+        <h2>${escapeHtml(data.title || "Media")}</h2>
+        <p class="sub">${escapeHtml(bits.join(" · "))}</p>
+      </div>`;
+      const cards = items.map((item, i) => {
+        const label = item.type === "photo" ? "Photo " + (i + 1) : "Video " + (i + 1);
+        const thumb = item.thumbnail || "";
+        return `<div class="item" data-index="${item.index}">
+          <div class="row">
+            <div class="thumb">${thumb ? `<img src="${escapeAttr(thumb)}" alt="">` : ""}</div>
+            <div>
+              <h3>${escapeHtml(label)}</h3>
+              <p class="sub">${item.type === "photo" ? "Image" : "Video"}${item.max_height ? " · up to " + item.max_height + "p" : ""}</p>
+            </div>
+          </div>
+          <div class="actions">${itemButtons(platform, item)}</div>
+        </div>`;
+      }).join("");
+      box.innerHTML = heading + `<div class="items">${cards}</div>
+        <div class="status" id="${prefix}-status">
+          <p class="status-msg" id="${prefix}-statusMsg">Preparing…</p>
+          <div class="bar"><span id="${prefix}-bar"></span></div>
+        </div>`;
+      box.classList.add("show");
+      box.querySelectorAll(".dl").forEach((btn) => {
+        btn.addEventListener("click", () => startSocialDownload(platform, btn));
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function escapeAttr(s) { return escapeHtml(s).replace(/'/g, "&#39;"); }
+
+    async function lookup(fromScreen, url) {
+      const prefixOf = { youtube: "yt", instagram: "ig", facebook: "fb" };
+      showAlert(prefixOf[fromScreen], "");
+      showRouted(prefixOf[fromScreen], "");
+      hideStatus(prefixOf[fromScreen]);
+      const res = await fetch("/api/info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+      const dest = data.platform || fromScreen;
+      if (dest && dest !== fromScreen && screens.includes(dest)) {
+        showScreen(dest);
+        if (data.kind && (dest === "instagram" || dest === "facebook")) setKind(dest, data.kind);
+        const destInput = dest === "youtube" ? $("yt-url") : dest === "instagram" ? $("ig-url") : $("fb-url");
+        if (destInput) destInput.value = url;
+        showRouted(prefixOf[dest], "This looks like a " + platformLabel(dest) + " link, so it was opened there automatically.");
+      } else if (data.kind && (dest === "instagram" || dest === "facebook") && data.kind !== kinds[dest] && data.kind !== "story") {
+        setKind(dest, data.kind);
+      }
+      if (!data.ok) {
+        if (data.needs_login) {
+          const note = dest === "instagram" ? $("ig-login") : dest === "facebook" ? $("fb-login") : null;
+          if (note) {
+            note.textContent = data.error;
+            note.classList.add("show");
+          }
+        }
+        throw new Error(data.error || "Could not load that link.");
+      }
+      if (dest === "youtube") renderYoutube(data, url);
+      else renderSocial(dest, data);
+    }
+
+    async function bindForm(formId, inputId, goId, screen, busyLabel, readyLabel) {
+      const form = $(formId);
+      const input = $(inputId);
+      const go = $(goId);
+      const trim = () => { input.value = (input.value || "").trim(); };
+      input.addEventListener("paste", () => setTimeout(trim, 0));
+      input.addEventListener("blur", trim);
+      input.addEventListener("change", trim);
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        trim();
+        const url = input.value.trim();
+        if (!url) return;
+        const prefix = { youtube: "yt", instagram: "ig", facebook: "fb" }[screen];
+        const result = $(prefix + "-result");
+        if (result) result.classList.remove("show");
+        go.disabled = true;
+        go.textContent = "Looking up…";
+        try {
+          await lookup(screen, url);
+        } catch (err) {
+          const destPrefix = { youtube: "yt", instagram: "ig", facebook: "fb" }[currentScreen] || prefix;
+          showAlert(destPrefix, err.message || "Could not load that link.");
+        } finally {
+          go.disabled = false;
+          go.textContent = readyLabel;
+          const destGo = currentScreen === "youtube" ? $("yt-go") : currentScreen === "instagram" ? $("ig-go") : currentScreen === "facebook" ? $("fb-go") : go;
+          if (destGo && destGo !== go) {
+            destGo.disabled = false;
+            destGo.textContent = destGo.id === "yt-go" ? "Get video" : "Get media";
+          }
+        }
+      });
+    }
+
+    async function startYoutubeDownload(quality) {
+      if (!current.youtube) return;
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      showStatus("yt", "Preparing your file…", "", 2);
+      allDlButtons().forEach((b) => b.disabled = true);
+      try {
+        const res = await fetch("/api/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: current.youtube.url, quality, title: current.youtube.title })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Could not start the download.");
+        await pollJob("yt", data.job_id);
+      } catch (err) {
+        showStatus("yt", err.message || "Download failed.", "error", 0);
+        allDlButtons().forEach((b) => b.disabled = false);
+      }
+    }
+
+    async function startSocialDownload(platform, btn) {
+      const data = current[platform];
+      if (!data) return;
+      const prefix = platform === "instagram" ? "ig" : "fb";
+      const quality = btn.dataset.quality;
+      const index = Number(btn.dataset.index || 0);
+      const item = (data.items || []).find((it) => it.index === index) || (data.items || [])[index] || {};
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      showStatus(prefix, "Preparing your file…", "", 2);
+      allDlButtons().forEach((b) => b.disabled = true);
+      try {
+        const res = await fetch("/api/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: data.webpage_url,
+            quality,
+            title: data.title || item.title,
+            kind: data.kind,
+            item_index: index,
+            image_url: item.image_url || item.thumbnail || null,
+            video_url: item.video_url || null
+          })
+        });
+        const body = await res.json();
+        if (!body.ok) throw new Error(body.error || "Could not start the download.");
+        await pollJob(prefix, body.job_id);
+      } catch (err) {
+        showStatus(prefix, err.message || "Download failed.", "error", 0);
+        allDlButtons().forEach((b) => b.disabled = false);
+      }
+    }
+
+    function pollJob(prefix, jobId) {
+      return new Promise((resolve, reject) => {
+        const tick = async () => {
+          try {
+            const res = await fetch("/api/progress/" + jobId);
+            const data = await res.json();
+            if (!data.ok) throw new Error(data.error || "Lost track of the download.");
+            if (data.status === "error") throw new Error(data.error || data.message || "Download failed.");
+            showStatus(prefix, data.message || "Working…", "", data.progress || 0);
+            if (data.status === "ready") {
+              clearInterval(pollTimer);
+              pollTimer = null;
+              const note = data.note || "Your file is ready.";
+              showStatus(prefix, note, data.fallback ? "note" : "", 100);
+              const a = document.createElement("a");
+              a.href = "/api/file/" + jobId;
+              a.download = data.filename || "";
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              allDlButtons().forEach((b) => b.disabled = false);
+              resolve();
+            }
+          } catch (err) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            allDlButtons().forEach((b) => b.disabled = false);
+            showStatus(prefix, err.message || "Download failed.", "error", 0);
+            reject(err);
+          }
+        };
+        tick();
+        pollTimer = setInterval(tick, 700);
+      });
+    }
+
+    document.querySelectorAll("[data-go]").forEach((btn) => {
+      btn.addEventListener("click", () => showScreen(btn.dataset.go));
+    });
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.addEventListener("click", () => setKind(chip.dataset.platform, chip.dataset.kind));
+    });
+    document.querySelectorAll("#yt-actions .dl").forEach((btn) => {
+      btn.addEventListener("click", () => startYoutubeDownload(btn.dataset.quality));
+    });
+
+    bindForm("yt-form", "yt-url", "yt-go", "youtube", "Looking up…", "Get video");
+    bindForm("ig-form", "ig-url", "ig-go", "instagram", "Looking up…", "Get media");
+    bindForm("fb-form", "fb-url", "fb-go", "facebook", "Looking up…", "Get media");
+
+    const initial = (location.hash || "").replace("#", "");
+    if (screens.includes(initial)) showScreen(initial);
+  </script>
+</body>
+</html>

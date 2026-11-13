@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: podfetch
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: YT_SKIP_UPDATE
+        value: "1"

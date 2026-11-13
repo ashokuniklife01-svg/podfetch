@@ -1,0 +1,5 @@
+flask>=3.0
+yt-dlp==2026.10.26
+gallery-dl>=1.27
+instaloader>=4.13
+gunicorn>=22.0

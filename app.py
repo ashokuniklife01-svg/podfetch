@@ -72,6 +72,22 @@ FALLBACK_CLIENTS = (
     ["ios", "android"],
 )
 
+# Innertube clients that can send Netscape cookies (web/tv family).
+# android, ios, android_vr and visionos ignore cookiefile, so when a
+# cookie file is present we try the cookie-capable batches first.
+COOKIE_CLIENTS = (
+    ["tv_samsung", "tv", "tv_simply", "tv_downgraded"],
+    ["web_safari", "web_embedded", "mweb", "web"],
+)
+COOKIELESS_CLIENTS = (
+    ["visionos", "android_vr"],
+    ["ios", "android"],
+)
+
+# Runtime path written by entrypoint.sh from YT_COOKIES_B64. Overridable
+# for local tests. Must stay outside the git repo (yt-dlp rewrites it).
+YT_COOKIE_FILE = Path(os.environ.get("YT_COOKIES_FILE", "/tmp/cookies/youtube.txt"))
+
 
 def _yt_verbose() -> bool:
     raw = os.environ.get("YT_VERBOSE")
@@ -395,7 +411,28 @@ def _client_label(clients: list[str] | None) -> str:
     return "default" if not clients else ",".join(clients)
 
 
+def _youtube_cookiefile() -> str | None:
+    """Path to a Netscape cookie file if one is present and non-empty.
+
+    Logs only whether cookies were loaded, never their contents.
+    """
+    path = YT_COOKIE_FILE
+    try:
+        if path.is_file() and path.stat().st_size > 0:
+            return str(path)
+    except OSError:
+        return None
+    return None
+
+
+def _cookies_loaded() -> bool:
+    return _youtube_cookiefile() is not None
+
+
 def _client_attempts() -> list[list[str] | None]:
+    # yt-dlp's own default client set is always first (None).
+    if _cookies_loaded():
+        return [None, *list(COOKIE_CLIENTS), *list(COOKIELESS_CLIENTS)]
     return [None, *list(FALLBACK_CLIENTS)]
 
 
@@ -450,6 +487,9 @@ def _ydl(opts: dict, clients: list[str] | None = None) -> YoutubeDL:
     if target and "impersonate" not in merged:
         merged["impersonate"] = target
         print(f"[podfetch] Using TLS impersonation: {target}", flush=True)
+    cookiefile = _youtube_cookiefile()
+    if cookiefile and "cookiefile" not in merged:
+        merged["cookiefile"] = cookiefile
     try:
         return YoutubeDL(merged)
     except Exception as exc:
@@ -466,6 +506,17 @@ def _ydl(opts: dict, clients: list[str] | None = None) -> YoutubeDL:
                 flush=True,
             )
             merged.pop("impersonate", None)
+            try:
+                return YoutubeDL(merged)
+            except Exception as exc2:
+                exc = exc2
+        # Missing or unreadable cookiefile should not take the app down.
+        if merged.get("cookiefile"):
+            print(
+                f"[podfetch] YouTube cookiefile unusable ({type(exc).__name__}); continuing without cookies",
+                flush=True,
+            )
+            merged.pop("cookiefile", None)
             return YoutubeDL(merged)
         raise
 
@@ -476,7 +527,11 @@ def _call_ydl(opts: dict, fn, *, use_aria2c: bool = True):
     opts = {**opts, "_use_aria2c": use_aria2c}
     for clients in _client_attempts():
         label = _client_label(clients)
-        print(f"[podfetch] YouTube download attempt with player clients: {label}", flush=True)
+        print(
+            f"[podfetch] YouTube download attempt with player clients: {label} "
+            f"(cookies={'yes' if _cookies_loaded() else 'no'})",
+            flush=True,
+        )
         try:
             with _ydl(opts, clients=clients) as ydl:
                 result = fn(ydl)
@@ -499,7 +554,11 @@ def _extract_info(url: str) -> dict:
     last_exc: BaseException | None = None
     for clients in _client_attempts():
         label = _client_label(clients)
-        print(f"[podfetch] YouTube info attempt with player clients: {label}", flush=True)
+        print(
+            f"[podfetch] YouTube info attempt with player clients: {label} "
+            f"(cookies={'yes' if _cookies_loaded() else 'no'})",
+            flush=True,
+        )
         try:
             with _ydl({"skip_download": True, "_use_aria2c": False}, clients=clients) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -1512,6 +1571,10 @@ def _log_runtime_diagnostics() -> None:
     except Exception as exc:
         print(f"[podfetch] bgutil POT server not reachable: {exc}", flush=True)
     print(f"[podfetch] impersonate_target={_impersonate_target()!r}", flush=True)
+    print(
+        f"[podfetch] YouTube cookies: {'loaded' if _cookies_loaded() else 'not loaded'}",
+        flush=True,
+    )
     print(
         f"[podfetch] js_runtimes={_js_runtimes()} YT_VERBOSE={_yt_verbose()} "
         f"YT_SKIP_UPDATE={os.environ.get('YT_SKIP_UPDATE')!r} RENDER={os.environ.get('RENDER')!r}",

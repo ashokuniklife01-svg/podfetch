@@ -12,6 +12,33 @@ DENO_DIR="${DENO_DIR:-/tmp/deno-cache}"
 # during the image build are gone. Recreate them before writing anything.
 mkdir -p /tmp/bgutil "$DENO_DIR"
 
+# Optional YouTube account cookies (Netscape cookies.txt), passed as a
+# single-line base64 env var so the secret is not baked into the image.
+# yt-dlp rewrites the cookie file, so it must be created at runtime and
+# left writable by this user. Never log the value.
+install_yt_cookies() {
+    if [ -z "${YT_COOKIES_B64:-}" ]; then
+        echo "[podfetch] YouTube cookies: not loaded (YT_COOKIES_B64 is unset)"
+        return 0
+    fi
+    mkdir -p /tmp/cookies
+    chmod 700 /tmp/cookies
+    cookie_path="/tmp/cookies/youtube.txt"
+    tmp_path="${cookie_path}.tmp"
+    # Strip whitespace so a wrapped value still decodes. Do not echo the secret.
+    if printf '%s' "$YT_COOKIES_B64" | tr -d ' \n\r\t' | base64 -d >"$tmp_path" 2>/dev/null \
+        && [ -s "$tmp_path" ]; then
+        mv "$tmp_path" "$cookie_path"
+        chmod 600 "$cookie_path"
+        echo "[podfetch] YouTube cookies: loaded"
+    else
+        echo "[podfetch] YouTube cookies: not loaded (YT_COOKIES_B64 could not be decoded)"
+        rm -f "$tmp_path" "$cookie_path"
+    fi
+}
+
+install_yt_cookies || echo "[podfetch] YouTube cookies: not loaded (install failed)"
+
 start_pot() {
     if [ ! -f /opt/bgutil/src/main.ts ]; then
         echo "[podfetch] bgutil POT sources not found at /opt/bgutil; continuing without a POT server"

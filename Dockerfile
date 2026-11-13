@@ -10,13 +10,16 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# yt-dlp needs a JavaScript runtime to solve YouTube's player challenges.
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 WORKDIR /app
 
 COPY requirements.txt .
 # Install pinned deps, then refresh yt-dlp to whatever is newest at image build time.
 # Runtime self-upgrade is disabled (YT_SKIP_UPDATE=1).
 RUN pip install --no-cache-dir -r requirements.txt gunicorn \
-    && pip install --no-cache-dir -U yt-dlp
+    && pip install --no-cache-dir -U "yt-dlp[default]"
 
 COPY . .
 

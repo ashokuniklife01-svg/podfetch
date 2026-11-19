@@ -1,0 +1,16 @@
+services:
+  - type: web
+    runtime: static
+    name: unik-tools
+    buildCommand: echo "static site, nothing to build"
+    staticPublishPath: ./
+    headers:
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin
+      - path: /*
+        name: Cross-Origin-Embedder-Policy
+        value: require-corp
+      - path: /vendor/*
+        name: Cache-Control
+        value: public, max-age=2592000

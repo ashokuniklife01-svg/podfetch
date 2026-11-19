@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UNIK Tools – Free Video to MP3, Video Compressor, Images to PDF, Background Remover</title>
+<meta name="description" content="Free online tools by UNIK Life: convert video to MP3, compress videos, turn images into PDF and remove image backgrounds. Runs in your browser, files never leave your device.">
+<meta name="theme-color" content="#6d28d9">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="favicon.svg" alt="" width="34" height="34"><span>UNIK <b>Tools</b></span></div>
+  <p class="tag">Free • Fast • Private — your files never leave your device</p>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-tab="mp3" role="tab"><span class="ico">🎵</span>Video to MP3</button>
+  <button class="tab" data-tab="compress" role="tab"><span class="ico">🗜️</span>Video Compressor</button>
+  <button class="tab" data-tab="pdf" role="tab"><span class="ico">📄</span>Images to PDF</button>
+  <button class="tab" data-tab="bg" role="tab"><span class="ico">✂️</span>Background Remover</button>
+</nav>
+
+<main>
+<!-- VIDEO TO MP3 -->
+<section class="panel active" id="panel-mp3">
+  <h1>Video to MP3 Converter</h1>
+  <p class="sub">Extract the audio from any video (MP4, MOV, MKV, WEBM, AVI…) as a high‑quality MP3.</p>
+  <label class="drop" id="mp3-drop">
+    <input type="file" id="mp3-file" accept="video/*,audio/*,.mkv,.mov,.avi,.flv,.wmv,.3gp,.m4a">
+    <div class="drop-inner"><div class="big">⬆️</div><b>Choose a video</b> or drag &amp; drop it here<small>Best under 500 MB</small></div>
+  </label>
+  <div class="fileinfo" id="mp3-info" hidden></div>
+  <div class="opts">
+    <label>Audio quality
+      <select id="mp3-bitrate">
+        <option value="128k">Standard – 128 kbps</option>
+        <option value="192k" selected>High – 192 kbps</option>
+        <option value="320k">Best – 320 kbps</option>
+      </select>
+    </label>
+  </div>
+  <div class="actions">
+    <button class="btn primary" id="mp3-go" disabled>Convert to MP3</button>
+    <button class="btn ghost" id="mp3-cancel" hidden>Cancel</button>
+  </div>
+  <div class="progress" id="mp3-prog" hidden><div class="bar"><i></i></div><span class="ptext"></span></div>
+  <div class="msg" id="mp3-msg" hidden></div>
+  <div class="result" id="mp3-result" hidden></div>
+</section>
+
+<!-- VIDEO COMPRESSOR -->
+<section class="panel" id="panel-compress">
+  <h1>Video Compressor</h1>
+  <p class="sub">Make videos smaller for WhatsApp, email or upload — choose the quality you want.</p>
+  <label class="drop" id="cmp-drop">
+    <input type="file" id="cmp-file" accept="video/*,.mkv,.mov,.avi,.flv,.wmv,.3gp">
+    <div class="drop-inner"><div class="big">⬆️</div><b>Choose a video</b> or drag &amp; drop it here<small>Best under 500 MB</small></div>
+  </label>
+  <div class="fileinfo" id="cmp-info" hidden></div>
+  <div class="opts">
+    <div class="presets" id="cmp-presets">
+      <label class="preset"><input type="radio" name="cmp-q" value="high"><span><b>High quality</b><small>Slightly smaller, looks the same</small></span></label>
+      <label class="preset"><input type="radio" name="cmp-q" value="medium" checked><span><b>Medium</b><small>Good balance (recommended)</small></span></label>
+      <label class="preset"><input type="radio" name="cmp-q" value="small"><span><b>Smallest file</b><small>Maximum compression</small></span></label>
+    </div>
+    <label>Max resolution
+      <select id="cmp-res">
+        <option value="0">Keep original</option>
+        <option value="1080">1080p</option>
+        <option value="720" selected>720p</option>
+        <option value="480">480p</option>
+        <option value="360">360p</option>
+      </select>
+    </label>
+  </div>
+  <p class="hint">⏱️ Compression runs on your device. It usually takes about as long as the video itself (longer on phones). Keep this tab open.</p>
+  <div class="actions">
+    <button class="btn primary" id="cmp-go" disabled>Compress video</button>
+    <button class="btn ghost" id="cmp-cancel" hidden>Cancel</button>
+  </div>
+  <div class="progress" id="cmp-prog" hidden><div class="bar"><i></i></div><span class="ptext"></span></div>
+  <div class="msg" id="cmp-msg" hidden></div>
+  <div class="result" id="cmp-result" hidden></div>
+</section>
+
+<!-- IMAGES TO PDF -->
+<section class="panel" id="panel-pdf">
+  <h1>Images to PDF</h1>
+  <p class="sub">Combine JPG, PNG, WEBP and more into one PDF. Drag to reorder pages.</p>
+  <label class="drop" id="pdf-drop">
+    <input type="file" id="pdf-file" accept="image/*" multiple>
+    <div class="drop-inner"><div class="big">🖼️</div><b>Choose images</b> or drag &amp; drop them here<small>You can add more any time</small></div>
+  </label>
+  <div class="thumbs" id="pdf-thumbs"></div>
+  <div class="opts" id="pdf-opts">
+    <label>Page size
+      <select id="pdf-size">
+        <option value="a4" selected>A4</option>
+        <option value="letter">US Letter</option>
+        <option value="legal">Legal</option>
+        <option value="fit">Same as image</option>
+      </select>
+    </label>
+    <label>Orientation
+      <select id="pdf-orient">
+        <option value="auto" selected>Auto (per image)</option>
+        <option value="portrait">Portrait</option>
+        <option value="landscape">Landscape</option>
+      </select>
+    </label>
+    <label>Margin
+      <select id="pdf-margin">
+        <option value="0">None</option>
+        <option value="20" selected>Small</option>
+        <option value="40">Large</option>
+      </select>
+    </label>
+    <label>File name
+      <input type="text" id="pdf-name" value="images" maxlength="80">
+    </label>
+  </div>
+  <div class="actions">
+    <button class="btn primary" id="pdf-go" disabled>Create PDF</button>
+    <button class="btn ghost" id="pdf-clear" hidden>Clear all</button>
+  </div>
+  <div class="progress" id="pdf-prog" hidden><div class="bar"><i></i></div><span class="ptext"></span></div>
+  <div class="msg" id="pdf-msg" hidden></div>
+  <div class="result" id="pdf-result" hidden></div>
+</section>
+
+<!-- BACKGROUND REMOVER -->
+<section class="panel" id="panel-bg">
+  <h1>Background Remover</h1>
+  <p class="sub">Remove the background from any photo automatically. Download a transparent PNG.</p>
+  <label class="drop" id="bg-drop">
+    <input type="file" id="bg-file" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif">
+    <div class="drop-inner"><div class="big">🧍</div><b>Choose a photo</b> or drag &amp; drop it here<small>JPG, PNG or WEBP</small></div>
+  </label>
+  <p class="hint">ℹ️ The first time, the AI model (about 45 MB) is downloaded once and then cached by your browser.</p>
+  <div class="opts">
+    <label>New background
+      <select id="bg-mode">
+        <option value="transparent" selected>Transparent</option>
+        <option value="white">White</option>
+        <option value="color">Custom colour</option>
+      </select>
+    </label>
+    <label id="bg-color-wrap" hidden>Colour <input type="color" id="bg-color" value="#22c55e"></label>
+  </div>
+  <div class="actions">
+    <button class="btn primary" id="bg-go" disabled>Remove background</button>
+  </div>
+  <div class="progress" id="bg-prog" hidden><div class="bar"><i></i></div><span class="ptext"></span></div>
+  <div class="msg" id="bg-msg" hidden></div>
+  <div class="compare" id="bg-compare" hidden>
+    <figure><figcaption>Original</figcaption><img id="bg-before" alt="Original"></figure>
+    <figure><figcaption>Result</figcaption><div class="checker"><img id="bg-after" alt="Background removed"></div></figure>
+  </div>
+  <div class="result" id="bg-result" hidden></div>
+</section>
+</main>
+
+<footer>
+  <p>🔒 All processing happens inside your browser. Nothing is uploaded to any server.</p>
+  <p>Made for the <b>UNIK Life</b> team · Works on Chrome, Edge, Firefox &amp; Safari (desktop and mobile)</p>
+</footer>
+<div class="toast" id="toast" hidden></div>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

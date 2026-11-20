@@ -98,3 +98,14 @@ textarea:focus,select:focus,input:focus{border-color:var(--accent);box-shadow:0 
   .meta{padding:8px}.cbtns .btn{flex:1}
 }
 @media (max-width:380px){.gallery{grid-template-columns:1fr}}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+fieldset:disabled{opacity:.45}
+fieldset:disabled .btn,fieldset:disabled .chip,fieldset:disabled .segbtn{cursor:not-allowed}
+.badge{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border-radius:99px;padding:2px 7px;margin-left:2px}
+.badge.soon{background:rgba(251,191,36,.18);color:#fde68a;border:1px solid rgba(251,191,36,.4)}
+.badge.free{background:rgba(34,197,94,.18);color:#bbf7d0;border:1px solid rgba(34,197,94,.45)}
+.tab.active .badge{background:rgba(0,0,0,.25);color:#fff;border-color:transparent}
+.soon-note{display:flex;gap:14px;align-items:flex-start;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.4);border-radius:14px;padding:14px 16px;margin-bottom:18px}
+.soon-note .big{font-size:30px;margin:0}
+.soon-note p{margin:4px 0 10px;color:var(--muted);font-size:14px}
+.soon-note .btn.primary{width:auto}

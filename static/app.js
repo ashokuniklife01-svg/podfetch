@@ -50,7 +50,7 @@
     for (const c of [].concat(kids)) if (c) e.append(c);
     return e;
   }
-  const money = (x) => x == null ? "" : "≈ $" + (x < 0.1 ? x.toFixed(3).replace(/0$/, "") : x.toFixed(2));
+  const money = (x) => x == null ? "" : x === 0 ? "Free" : "≈ $" + (x < 0.1 ? x.toFixed(3).replace(/0$/, "") : x.toFixed(2));
   function formError(msg) { const m = $("#formMsg"); m.textContent = msg || ""; m.hidden = !msg; }
   const models = () => st.cfg ? st.cfg.models.filter((m) => m.mode === st.mode) : [];
   const curModel = () => st.cfg && st.cfg.models.find((m) => m.id === st.model[st.mode]);
@@ -117,10 +117,18 @@
     const r = m.resolutions.length ? st.resolution[m.id] : "";
     return m.prices[d + "|" + a + "|" + r];
   }
-  function updateCost() { const m = curModel(); $("#cost").textContent = m ? money(priceFor(m)) : ""; }
+  function updateCost() {
+    const m = curModel(); $("#cost").textContent = m ? money(priceFor(m)) : "";
+    $("#priceHint").textContent = m && m.free ? "Free images by Pollinations.ai · no account or credit needed. One image at a time." : "Prices are approximate fal.ai rates and are charged to your fal.ai account.";
+  }
 
+  const videoOn = () => !!(st.cfg && st.cfg.fal_enabled);
+  const locked = (mode) => mode !== "t2i" && !videoOn();
   function setMode(mode) {
     st.mode = mode;
+    const off = locked(mode);
+    $("#soon").hidden = !off;
+    $("#fields").disabled = off;
     document.querySelectorAll(".tab").forEach((t) => { const on = t.dataset.mode === mode; t.classList.toggle("active", on); t.setAttribute("aria-selected", on); });
     const t = MODE_TEXT[mode];
     $("#promptLbl").textContent = t.lbl; $("#prompt").placeholder = t.ph; $("#go").firstElementChild.textContent = t.btn;
@@ -128,6 +136,11 @@
     $("#negative").closest(".more").hidden = mode === "t2i";
     formError("");
     renderModels();
+  }
+  function applyAvailability() {
+    const on = videoOn();
+    document.querySelectorAll(".badge.soon").forEach((b) => { b.hidden = on; });
+    document.querySelectorAll(".badge.free").forEach((b) => { b.hidden = !st.cfg.models.some((m) => m.free); });
   }
   function setAspect(a) {
     st.aspect = a;
@@ -187,12 +200,17 @@
     const m = curModel();
     const prompt = $("#prompt").value.trim();
     if (!st.cfg) { formError("The studio is still loading. Please wait a second."); return; }
-    if (!st.cfg.key_configured) { formError("The AI service isn't set up yet: the fal.ai key (FAL_KEY) is missing on the server."); return; }
+    if (locked(st.mode) || (!m.free && !videoOn())) { formError("Video needs fal.ai credit · coming soon. Prompt to Image is free right now."); return; }
     if (st.mode === "i2v" && !st.img) { formError("Please choose a starting image first."); return; }
     if (prompt.length < 3) { formError(prompt ? "Please describe it in a few more words." : "Please type a prompt describing what you want."); $("#prompt").focus(); return; }
     st.submitting = true; $("#go").disabled = true;
     const label = $("#go").firstElementChild.textContent;
     $("#go").firstElementChild.textContent = st.mode === "i2v" && !st.imgUrl ? "Uploading image…" : "Sending…";
+    if (m.free) {
+      try { await freeImage(m, prompt); }
+      finally { st.submitting = false; $("#go").disabled = false; $("#go").firstElementChild.textContent = label; }
+      return;
+    }
     try {
       const body = { mode: st.mode, model: m.id, prompt, aspect: st.aspect, negative: $("#negative").value.trim() };
       if (m.durations.length) body.duration = st.duration[m.id];
@@ -206,8 +224,44 @@
     finally { st.submitting = false; $("#go").disabled = false; $("#go").firstElementChild.textContent = label; }
   }
 
-  function expectedSecs(job) { return job.mode === "t2i" ? 15 : 150; }
-  function startJob(job) {
+  // ---------- free images (Pollinations via our server, with a direct-from-browser fallback)
+  function pollUrl(prompt, aspect) {
+    const [w, h] = aspect === "16:9" ? [1024, 576] : [576, 1024];
+    const seed = Math.floor(Math.random() * 16777215);
+    return "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt.replace(/\s+/g, " ")) + "?width=" + w + "&height=" + h + "&seed=" + seed + "&nologo=true";
+  }
+  async function directImage(url) {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 110000);
+    try {
+      const r = await fetch(url, { signal: ctl.signal });
+      const ct = r.headers.get("content-type") || "";
+      if (!r.ok || !ct.startsWith("image/")) throw new Error("http " + r.status);
+      await r.blob(); return url;
+    } finally { clearTimeout(t); }
+  }
+  async function freeImage(m, prompt) {
+    const job = { id: "free-" + Date.now(), mode: "t2i", model: m.id, modelName: "Free AI image", prompt, aspect: st.aspect, est: 0, started: Date.now(), state: "running", free: true };
+    startJob(job, true);
+    job.ui.status.textContent = "Painting your free image… (usually 5–20 seconds)";
+    const tick = setInterval(() => setJobProgress(job), 500);
+    try {
+      let url;
+      try {
+        const d = await postJSON("/api/free-image", { prompt, aspect: st.aspect });
+        return finishJob(job, [{ type: "image", url: d.outputs[0].url, public_url: d.outputs[0].public_url }]);
+      } catch (e) {
+        if (!["free_limit", "free_busy", "free_failed", "free_timeout", "network", "http_502", "http_503", "http_504"].includes(e.code)) throw e;
+        job.ui.status.textContent = "Trying another route…";
+        try { url = await directImage(pollUrl(prompt, st.aspect)); }
+        catch (_) { throw e; }
+      }
+      finishJob(job, [{ type: "image", url }]);
+    } catch (e) { failJob(job, e.message); }
+    finally { clearInterval(tick); }
+  }
+
+  function expectedSecs(job) { return job.free ? 10 : job.mode === "t2i" ? 15 : 150; }
+  function startJob(job, noPoll) {
     const bar = el("i"), status = el("div", { class: "js", text: "Waiting in line…" });
     const btns = el("div", { class: "jbtns" });
     job.node = el("div", { class: "job" }, [
@@ -218,7 +272,7 @@
     job.ui = { bar, status, btns, time: job.node.querySelector(".jtime") };
     $("#jobs").prepend(job.node);
     job.fails = 0;
-    poll(job);
+    if (!noPoll) poll(job);
   }
   function setJobProgress(job) {
     const secs = Math.round((Date.now() - job.started) / 1000);
@@ -252,8 +306,8 @@
   function finishJob(job, outputs) {
     job.state = "done"; saveJobs();
     const gal = load(LS_GAL, []);
-    for (const o of outputs) gal.unshift({ id: job.id + ":" + o.url.slice(-12), type: o.type, url: o.url, prompt: job.prompt, model: job.modelName, mode: job.mode, aspect: job.aspect, est: job.est, at: Date.now() });
-    save(LS_GAL, gal.slice(0, 100));
+    for (const o of outputs) gal.unshift({ id: job.id + ":" + o.url.slice(-12), type: o.type, url: o.url, public_url: o.public_url, prompt: job.prompt, model: job.modelName, mode: job.mode, aspect: job.aspect, est: job.est, at: Date.now() });
+    saveGallery(gal.slice(0, 100));
     job.node.remove();
     renderGallery(true);
   }
@@ -270,8 +324,22 @@
   function resumeJobs() { for (const j of jobs) if (!j.node && j.state !== "done" && j.state !== "error") startJob(j); }
 
   // ---------- gallery
+  // Free images are kept as small data URLs so they never need re-fetching. If browser storage
+  // fills up, the oldest ones fall back to their public Pollinations link.
+  function saveGallery(gal) {
+    for (;;) {
+      try { localStorage.setItem(LS_GAL, JSON.stringify(gal)); return; }
+      catch (_) {
+        let i = gal.length - 1;
+        while (i >= 0 && !(gal[i].url || "").startsWith("data:")) i--;
+        if (i >= 0) { if (gal[i].public_url) gal[i].url = gal[i].public_url; else gal.splice(i, 1); }
+        else if (gal.length) gal.pop();
+        else return;
+      }
+    }
+  }
   async function download(item, btn) {
-    const ext = item.type === "video" ? "mp4" : (item.url.match(/\.(png|jpe?g|webp)(\?|$)/i) || [, "png"])[1];
+    const ext = item.type === "video" ? "mp4" : item.url.startsWith("data:image/jpeg") || item.public_url ? "jpg" : (item.url.match(/\.(png|jpe?g|webp)(\?|$)/i) || [, "png"])[1];
     const name = "unik-ai-" + new Date(item.at).toISOString().slice(0, 19).replace(/[:T]/g, "-") + "." + ext;
     const old = btn.textContent; btn.textContent = "Downloading…"; btn.disabled = true;
     try {
@@ -282,7 +350,8 @@
       document.body.append(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 30000);
     } catch (_) {
-      window.location.href = "/api/download?url=" + encodeURIComponent(item.url);
+      const src = item.url.startsWith("data:") ? item.public_url : item.url;
+      if (src) window.location.href = "/api/download?url=" + encodeURIComponent(src);
     } finally { btn.textContent = old; btn.disabled = false; }
   }
   function renderGallery(flash) {
@@ -294,7 +363,9 @@
       const media = it.type === "video"
         ? el("video", { src: it.url, controls: "", playsinline: "", preload: "metadata", loop: "" })
         : el("img", { src: it.url, alt: it.prompt.slice(0, 120), loading: "lazy" });
-      media.addEventListener("error", () => { media.replaceWith(el("div", { class: "empty", text: "Preview expired" })); });
+      media.addEventListener("error", () => {
+        if (it.public_url && media.src !== it.public_url && it.type === "image") { media.src = it.public_url; return; }
+        media.replaceWith(el("div", { class: "empty", text: "Preview expired" })); });
       const dl = el("button", { class: "btn small primary", type: "button", text: "⬇ Download" });
       dl.addEventListener("click", () => download(it, dl));
       const card = el("div", { class: "card" + (it.aspect === "9:16" ? " v916" : "") }, [
@@ -305,7 +376,7 @@
           el("div", { class: "cbtns" }, [
             dl,
             el("button", { class: "btn small ghost", type: "button", text: "Reuse prompt", onclick: () => { setMode(it.mode); setAspect(it.aspect); $("#prompt").value = it.prompt; updateCount(); window.scrollTo({ top: 0, behavior: "smooth" }); } }),
-            el("button", { class: "btn small ghost", type: "button", title: "Remove from list", "aria-label": "Remove", text: "✕", onclick: () => { const g = load(LS_GAL, []); g.splice(i, 1); save(LS_GAL, g); renderGallery(); } }),
+            el("button", { class: "btn small ghost", type: "button", title: "Remove from list", "aria-label": "Remove", text: "✕", onclick: () => { const g = load(LS_GAL, []); g.splice(i, 1); saveGallery(g); renderGallery(); } }),
           ]),
         ]),
       ]);
@@ -324,6 +395,7 @@
   $("#form").addEventListener("submit", submit);
   $("#file").addEventListener("change", (e) => pickFile(e.target.files[0]));
   $("#clearImg").addEventListener("click", clearImage);
+  $("#tryFree").addEventListener("click", () => { setMode("t2i"); savePrefs(); $("#prompt").focus(); });
   const drop = $("#drop");
   ["dragenter", "dragover"].forEach((n) => drop.addEventListener(n, (e) => { e.preventDefault(); drop.classList.add("over"); }));
   ["dragleave", "drop"].forEach((n) => drop.addEventListener(n, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
@@ -342,9 +414,11 @@
         await new Promise((r) => setTimeout(r, 2500));
       }
     }
-    if (!st.cfg.key_configured) { const b = $("#banner"); b.textContent = "Setup needed: the fal.ai key (FAL_KEY) isn't added on the server yet, so generating is switched off."; b.hidden = false; }
+    applyAvailability();
     setAspect(st.aspect);
-    setMode(["t2v", "t2i", "i2v"].includes(p.mode) ? p.mode : "t2v");
+    let mode = ["t2v", "t2i", "i2v"].includes(p.mode) ? p.mode : (videoOn() ? "t2v" : "t2i");
+    if (locked(mode)) mode = "t2i";
+    setMode(mode);
     if (st.cfg.password_required && !localStorage.getItem(LS_PW)) showLock();
     else resumeJobs();
   }

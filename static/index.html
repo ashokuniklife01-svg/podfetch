@@ -17,14 +17,21 @@
 <div id="banner" class="banner" hidden></div>
 
 <nav class="tabs" role="tablist">
-  <button class="tab active" data-mode="t2v" role="tab" aria-selected="true"><span class="ico">🎬</span>Prompt to Video</button>
-  <button class="tab" data-mode="t2i" role="tab" aria-selected="false"><span class="ico">🖼️</span>Prompt to Image</button>
-  <button class="tab" data-mode="i2v" role="tab" aria-selected="false"><span class="ico">✨</span>Image to Video</button>
+  <button class="tab active" data-mode="t2v" role="tab" aria-selected="true"><span class="ico">🎬</span>Prompt to Video<em class="badge soon" hidden>Soon</em></button>
+  <button class="tab" data-mode="t2i" role="tab" aria-selected="false"><span class="ico">🖼️</span>Prompt to Image<em class="badge free" hidden>Free</em></button>
+  <button class="tab" data-mode="i2v" role="tab" aria-selected="false"><span class="ico">✨</span>Image to Video<em class="badge soon" hidden>Soon</em></button>
 </nav>
 
 <main>
   <section class="panel" id="studio">
+    <div id="soon" class="soon-note" role="status" hidden>
+      <div class="big">🎬</div>
+      <div><b>Video needs fal.ai credit · coming soon</b>
+        <p>Video generation will switch on once a fal.ai account with credit is connected. Prompt to Image is <b>free</b> right now.</p>
+        <button type="button" class="btn small primary" id="tryFree">🖼️ Make a free image</button></div>
+    </div>
     <form id="form" autocomplete="off" novalidate>
+      <fieldset id="fields">
       <div id="imgBox" class="field" hidden>
         <span class="lbl">Starting image</span>
         <label class="drop" id="drop">
@@ -79,8 +86,9 @@
       <div class="actions">
         <button type="submit" class="btn primary" id="go"><span>✨ Generate</span><span class="cost" id="cost"></span></button>
       </div>
-      <p class="hint small">Prices are approximate fal.ai rates and are charged to your fal.ai account.</p>
+      <p class="hint small" id="priceHint">Prices are approximate fal.ai rates and are charged to your fal.ai account.</p>
       <div id="formMsg" class="msg error" role="alert" hidden></div>
+      </fieldset>
     </form>
   </section>
 
@@ -105,7 +113,7 @@
   </form>
 </div>
 
-<footer class="foot">UNIK AI Studio · powered by fal.ai models (Google Veo, Kling, Wan, Nano Banana, Seedream, FLUX)</footer>
+<footer class="foot">UNIK AI Studio · free images by Pollinations.ai · video by fal.ai models (Google Veo, Kling, Wan)</footer>
 <script src="app.js"></script>
 </body>
 </html>

@@ -34,33 +34,60 @@ procs = []
 try:
     mock = subprocess.Popen([PY, os.path.join(HERE, "mock_fal.py")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); procs.append(mock)
     wait_up("http://127.0.0.1:5056/_log")
-    env_nokey = {"FAL_KEY": "", "APP_PASSWORD": ""}
+    env_nokey = {"FAL_KEY": "fake-key:fake-secret", "VIDEO_ENABLED": "", "APP_PASSWORD": "", "POLLINATIONS_BASE": "http://127.0.0.1:5056"}
     procs.append(start(5055, env_nokey))
-    env_mock = {"FAL_KEY": "fake-key:fake-secret", "APP_PASSWORD": "pass123", "FAL_QUEUE_BASE": "http://127.0.0.1:5056", "FAL_REST_BASE": "http://127.0.0.1:5056"}
+    env_mock = {"FAL_KEY": "fake-key:fake-secret", "APP_PASSWORD": "pass123", "FAL_QUEUE_BASE": "http://127.0.0.1:5056", "FAL_REST_BASE": "http://127.0.0.1:5056", "VIDEO_ENABLED": "true"}
     procs.append(start(5057, env_mock))
 
     with sync_playwright() as pw:
         br = pw.chromium.launch(executable_path="/usr/bin/google-chrome", args=["--no-sandbox"])
 
-        # ---------------- A: no key
-        ctx = br.new_context(viewport={"width": 1280, "height": 900}); page = ctx.new_page(); errs = []; watch(page, errs)
+        # ---------------- A: default deploy (key present but VIDEO_ENABLED unset) -> free images only
+        ctx = br.new_context(viewport={"width": 1280, "height": 900}, accept_downloads=True); page = ctx.new_page(); errs = []; watch(page, errs)
         page.goto("http://127.0.0.1:5055/"); page.wait_for_selector("#model option", state="attached")
-        check("A banner shows missing key", page.is_visible("#banner") and "FAL_KEY" in page.inner_text("#banner"))
+        check("A opens on Prompt to Image", page.get_attribute(".tab[data-mode=t2i]", "aria-selected") == "true")
+        check("A no warning banner", not page.is_visible("#banner"))
         check("A lock hidden when no password", not page.is_visible("#lock"))
-        check("A t2v models listed", page.locator("#model option").count() == 6)
-        check("A cost shown", page.inner_text("#cost").startswith("≈ $"), page.inner_text("#cost"))
-        page.fill("#prompt", "test prompt here"); page.click("#go")
-        check("A generate gives friendly no-key msg", "FAL_KEY" in page.inner_text("#formMsg"))
-        # server-side no-key path via fetch
-        r = page.evaluate("""async()=>{const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'t2v',model:'veo31-fast',prompt:'abc test',aspect:'16:9',duration:8,audio:true})});return [r.status, await r.json()]}""")
-        check("A server no_key 503", r[0] == 503 and r[1]["error"]["code"] == "no_key", r)
-        for mode, n in (("t2i", 6), ("i2v", 6)):
+        check("A Free badge + 2 Soon badges", page.is_visible(".badge.free") and page.locator(".badge.soon:visible").count() == 2)
+        check("A only free image model listed", page.locator("#model option").count() == 1 and page.input_value("#model") == "free-pollinations")
+        check("A button says Free", page.inner_text("#cost") == "Free", page.inner_text("#cost"))
+        check("A form enabled for images", not page.is_disabled("#go") and not page.is_visible("#soon"))
+        for mode in ("t2v", "i2v"):
             page.click(f".tab[data-mode={mode}]")
-            check(f"A {mode} models listed", page.locator("#model option").count() == n)
-        check("A i2v shows image box", page.is_visible("#drop"))
-        page.screenshot(path=os.path.join(SHOTS, "nokey_desktop.png"), full_page=True)
-        check("A no console errors", not [e for e in errs if "503" not in e], errs)
+            check(f"A {mode} shows coming-soon note", page.is_visible("#soon") and "fal.ai credit" in page.inner_text("#soon"))
+            check(f"A {mode} form disabled", page.is_disabled("#go") and page.is_disabled("#prompt"))
+            check(f"A {mode} models still visible", page.locator("#model option").count() == 6)
+        r = page.evaluate("""async()=>{const r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'t2v',model:'veo31-fast',prompt:'abc test',aspect:'16:9',duration:8,audio:true})});return [r.status, await r.json()]}""")
+        check("A server refuses video (video_disabled)", r[0] == 503 and r[1]["error"]["code"] == "video_disabled", r)
+        page.screenshot(path=os.path.join(SHOTS, "video_soon.png"), full_page=False)
+        page.click("#tryFree")
+        check("A 'Make a free image' switches to images", page.get_attribute(".tab[data-mode=t2i]", "aria-selected") == "true" and not page.is_visible("#soon"))
+        # free image 16:9 then 9:16
+        page.click(".segbtn[data-aspect='16:9']"); page.fill("#prompt", "podcast studio wide neon"); page.click("#go")
+        page.wait_for_selector(".card img", timeout=30000)
+        nat = page.evaluate("new Promise(r=>{const i=document.querySelector('.card img'); const f=()=>r([i.naturalWidth,i.naturalHeight]); i.complete&&i.naturalWidth?f():i.onload=f})")
+        check("A free 16:9 image in gallery", nat[0] > nat[1], nat)
+        page.click(".segbtn[data-aspect='9:16']"); page.fill("#prompt", "founder portrait with mic"); page.click("#go")
+        page.wait_for_function("document.querySelectorAll('.card img').length==2", timeout=30000)
+        check("A free 9:16 card styled", "v916" in page.locator(".card").first.get_attribute("class"))
+        check("A gallery shows Free", "Free" in page.inner_text(".card .meta small"))
+        page.fill("#prompt", "BLOCKME something"); page.click("#go")
+        page.wait_for_selector(".job.err", timeout=20000)
+        check("A free content-policy message", "content rules" in page.inner_text(".job.err"), page.inner_text(".job.err"))
+        with page.expect_download() as dl:
+            page.locator(".card .btn.primary").first.click()
+        check("A free image download", dl.value.suggested_filename.startswith("unik-ai-"), dl.value.suggested_filename)
+        log = json.loads(urllib.request.urlopen("http://127.0.0.1:5056/_log").read())
+        pl = [l for l in log if l["endpoint"] == "pollinations"]
+        check("A pollinations sizes 1024x576 / 576x1024", [(l["args"]["width"], l["args"]["height"]) for l in pl[:2]] == [("1024", "576"), ("576", "1024")], pl)
+        check("A each free image fetched once (server only)", len([l for l in pl if "BLOCKME" not in l["prompt"]]) == 2, pl)
+        check("A no fal calls made", not [l for l in log if l["endpoint"] != "pollinations"], log)
+        page.reload(); page.wait_for_selector(".card img")
+        check("A gallery persists after reload", page.locator(".card").count() == 2)
+        page.screenshot(path=os.path.join(SHOTS, "free_desktop.png"), full_page=True)
+        check("A no console errors", not [e for e in errs if not any(s in e for s in ("503", "422"))], errs)
         ctx.close()
+        urllib.request.urlopen("http://127.0.0.1:5056/_reset")
 
         # ---------------- B: mock fal + password
         ctx = br.new_context(viewport={"width": 1280, "height": 900}, accept_downloads=True); page = ctx.new_page(); errs = []; watch(page, errs)
@@ -71,6 +98,9 @@ try:
         page.fill("#pw", "pass123"); page.click("#lockForm button"); page.wait_for_selector("#lock", state="hidden")
         check("B unlocked", not page.is_visible("#lock"))
         check("B no banner with key", not page.is_visible("#banner"))
+        check("B no Soon badges when video on", page.locator(".badge.soon:visible").count() == 0)
+        page.click(".tab[data-mode=t2i]")
+        check("B paid image models listed too", page.locator("#model option").count() == 7)
 
         # t2v 16:9 Veo 3.1 Fast, 4s silent
         page.click(".tab[data-mode=t2v]"); page.click(".segbtn[data-aspect='16:9']")

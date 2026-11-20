@@ -36,6 +36,11 @@ def fal_key():
     return (os.environ.get("FAL_KEY") or "").strip()
 
 
+def fal_enabled():
+    """Paid fal.ai features (video + paid image models) need a key AND VIDEO_ENABLED=true."""
+    return bool(fal_key()) and os.environ.get("VIDEO_ENABLED", "").strip().lower() == "true"
+
+
 def app_password():
     return os.environ.get("APP_PASSWORD") or ""
 
@@ -127,6 +132,14 @@ def _json_or_text(r):
         return r.text
 
 
+VIDEO_OFF_MSG = "Video needs fal.ai credit and is coming soon. Prompt to Image is free right now!"
+
+
+def _require_fal():
+    if not fal_enabled():
+        raise ApiError("video_disabled", VIDEO_OFF_MSG, 503)
+
+
 def _fal_headers(extra=None):
     key = fal_key()
     if not key:
@@ -157,6 +170,7 @@ LIMITS = {  # bucket: (max events, window seconds)
     "login": (10, 600),
     "status": (240, 60),
     "download": (60, 600),
+    "free_image": (int(os.environ.get("RATE_FREE_IMAGE", "15")), 600),
 }
 
 
@@ -252,8 +266,9 @@ def index():
 
 @app.get("/api/config")
 def config():
+    on = fal_enabled()
     return jsonify(ok=True, password_required=bool(app_password()), key_configured=bool(fal_key()),
-                   aspects=list(ASPECTS), models=public_catalogue())
+                   fal_enabled=on, video_enabled=on, aspects=list(ASPECTS), models=public_catalogue(on))
 
 
 @app.post("/api/login")
@@ -273,6 +288,7 @@ ALLOWED_IMG = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 @app.post("/api/upload")
 def upload():
     require_password()
+    _require_fal()
     rate_limit("upload")
     f = request.files.get("image")
     if not f:
@@ -304,7 +320,7 @@ def upload():
 def validate_request(body):
     mode = body.get("mode")
     m = BY_ID.get(body.get("model", ""))
-    if not m or m["mode"] != mode:
+    if not m or m["mode"] != mode or m.get("provider", "fal") != "fal":
         raise ApiError("bad_model", "Please pick a model from the list.")
     prompt = str(body.get("prompt") or "").strip()
     if not prompt:
@@ -345,6 +361,7 @@ def generate():
     require_password()
     body = request.get_json(silent=True) or {}
     m, o = validate_request(body)
+    _require_fal()
     headers = _fal_headers({"Content-Type": "application/json"})
     rate_limit("generate")
     payload = m["build"](o)
@@ -402,7 +419,73 @@ def status(tok):
     return jsonify(ok=True, state="done", outputs=outs)
 
 
-DL_HOSTS = ("fal.media", "fal.run", "fal.ai", "storage.googleapis.com")
+# ---------------------------------------------------------------- free images (Pollinations)
+POLL_BASE = os.environ.get("POLLINATIONS_BASE", "https://image.pollinations.ai")
+# The free (keyless) Pollinations tier caps images at ~768x768 pixels of area and keeps the
+# aspect ratio, so these are the largest exact 16:9 / 9:16 sizes it returns.
+POLL_SIZES = {"16:9": (1024, 576), "9:16": (576, 1024)}
+_poll_slots = threading.BoundedSemaphore(int(os.environ.get("FREE_IMAGE_CONCURRENCY", "2")))
+
+
+def pollinations_url(prompt, aspect, seed):
+    from urllib.parse import quote
+    w, h = POLL_SIZES[aspect]
+    return "%s/prompt/%s?width=%d&height=%d&seed=%d&nologo=true" % (POLL_BASE, quote(prompt, safe=""), w, h, seed)
+
+
+@app.post("/api/free-image")
+def free_image():
+    require_password()
+    body = request.get_json(silent=True) or {}
+    prompt = " ".join(str(body.get("prompt") or "").split())
+    if len(prompt) < 3:
+        raise ApiError("short_prompt", "Please describe it in a few more words.")
+    if len(prompt) > 1000:
+        raise ApiError("long_prompt", "That prompt is too long for free images (max 1000 characters).")
+    aspect = body.get("aspect")
+    if aspect not in ASPECTS:
+        raise ApiError("bad_aspect", "Pick 16:9 or 9:16.")
+    rate_limit("free_image")
+    seed = int.from_bytes(os.urandom(3), "big")
+    url = pollinations_url(prompt, aspect, seed)
+    if not _poll_slots.acquire(timeout=60):
+        raise ApiError("free_busy", "The free image service is busy. Please try again in a minute.", 503)
+    t0 = time.time()
+    try:
+        r = None
+        for attempt in range(2):
+            try:
+                r = requests.get(url, timeout=(10, 110), headers={"User-Agent": "UNIK-AI-Studio/1.0", "Accept": "image/*"})
+            except requests.RequestException as e:
+                log.warning("pollinations error: %s", e)
+                r = None
+            if r is not None and r.status_code < 500:
+                break
+            time.sleep(1.5)
+    finally:
+        _poll_slots.release()
+    if r is None:
+        raise ApiError("free_timeout", "The free image service didn't answer in time. Please try again.", 504)
+    ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if r.status_code in (402, 429):
+        wait = r.headers.get("Retry-After", "")
+        raise ApiError("free_limit", "The free image service is at its limit right now. Please try again in %s." %
+                       ((wait + " seconds") if wait.isdigit() else "a minute"), 429)
+    if r.status_code >= 400 or not ctype.startswith("image/") or len(r.content) < 1000:
+        txt = (r.text[:300] if not ctype.startswith("image/") else "").lower()
+        log.info("pollinations %s %s %s", r.status_code, ctype, txt[:200])
+        if "safe" in txt or "nsfw" in txt or "content" in txt or "filter" in txt:
+            raise ApiError("content_policy", "The free AI refused this prompt because of its content rules. Please rephrase it.", 422)
+        raise ApiError("free_failed", "The free image service had a problem. Please try again in a moment.", 502)
+    took = round(time.time() - t0, 1)
+    log.info("free image %s %dB %.1fs ip=%s", aspect, len(r.content), took, client_ip())
+    w, h = POLL_SIZES[aspect]
+    data_url = "data:" + ctype + ";base64," + base64.b64encode(r.content).decode()
+    return jsonify(ok=True, outputs=[{"type": "image", "url": data_url, "public_url": url}],
+                   width=w, height=h, seconds=took, bytes=len(r.content), estimate=0)
+
+
+DL_HOSTS = ("fal.media", "fal.run", "fal.ai", "storage.googleapis.com", "image.pollinations.ai")
 
 
 @app.get("/api/download")

@@ -62,6 +62,19 @@ def result(owner_app, rid):
         return jsonify(images=[{"url": f"{base}/files/out{tag}.png"}])
     return jsonify(video={"url": f"{base}/files/out{tag}.mp4"})
 
+@app.get("/prompt/<path:p>")
+def pollinations(p):
+    LOG.append({"endpoint": "pollinations", "prompt": p, "args": dict(request.args)})
+    if "BLOCKME" in p:
+        return jsonify(error="Prompt blocked by safety filter"), 400
+    time.sleep(0.5)
+    tag = "169" if int(request.args.get("width", 0)) > int(request.args.get("height", 0)) else "916"
+    return send_file(os.path.join(HERE, f"out{tag}.png"), mimetype="image/png")
+
+@app.get("/_reset")
+def reset():
+    LOG.clear(); return "ok"
+
 @app.get("/_log")
 def log():
     return jsonify(LOG)

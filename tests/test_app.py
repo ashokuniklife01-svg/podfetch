@@ -11,7 +11,10 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import app as appmod  # noqa: E402
-from models import MODELS, ASPECTS  # noqa: E402
+from models import MODELS as ALL_MODELS, ASPECTS  # noqa: E402
+
+MODELS = [m for m in ALL_MODELS if m.get("provider", "fal") == "fal"]
+FREE = [m for m in ALL_MODELS if m.get("provider") == "pollinations"]
 
 SCHEMA_DIR = os.path.join(os.path.dirname(__file__), "schemas")
 
@@ -85,6 +88,7 @@ def fal(monkeypatch):
     f = FakeFal()
     monkeypatch.setattr(appmod.requests, "request", f)
     monkeypatch.setenv("FAL_KEY", "test-key-id:test-secret")
+    monkeypatch.setenv("VIDEO_ENABLED", "true")
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     appmod._hits.clear()
     return f
@@ -123,6 +127,7 @@ def body_for(m, aspect, d, au, r):
 def test_three_modes_present():
     modes = {m["mode"] for m in MODELS}
     assert modes == {"t2v", "t2i", "i2v"}
+    assert len(FREE) == 1 and FREE[0]["mode"] == "t2i"
 
 
 @pytest.mark.parametrize("m", MODELS, ids=[m["id"] for m in MODELS])
@@ -152,7 +157,12 @@ def test_config_without_key(client, monkeypatch):
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     d = client.get("/api/config").get_json()
     assert d["ok"] and d["key_configured"] is False and d["password_required"] is False
-    assert len(d["models"]) == len(MODELS)
+    assert d["fal_enabled"] is False
+    ids = {m["id"] for m in d["models"]}
+    # free image model + all video models listed; paid fal image models hidden
+    assert "free-pollinations" in ids
+    assert all(m["id"] in ids for m in MODELS if m["mode"] != "t2i")
+    assert not any(m["id"] in ids for m in MODELS if m["mode"] == "t2i")
     assert "test-key" not in json.dumps(d)
 
 
@@ -161,8 +171,8 @@ def test_generate_without_key_is_friendly(client, monkeypatch):
     monkeypatch.delenv("APP_PASSWORD", raising=False)
     r = client.post("/api/generate", json=body_for(MODELS[0], "16:9", 8, True, None))
     assert r.status_code == 503
-    assert r.get_json()["error"]["code"] == "no_key"
-    assert "FAL_KEY" in r.get_json()["error"]["message"]
+    assert r.get_json()["error"]["code"] == "video_disabled"
+    assert "coming soon" in r.get_json()["error"]["message"]
 
 
 def test_key_never_in_responses(client, fal):
@@ -337,3 +347,129 @@ def test_spa_and_health(client):
     assert client.get("/health").get_json() == {"ok": True}
     assert b"UNIK" in client.get("/").data
     assert client.get("/api/nope").status_code == 404
+
+
+# ------------------------------------------------------------------ video switch
+@pytest.mark.parametrize("flag", [None, "", "false", "yes", "1"])
+def test_video_disabled_unless_flag_true(client, fal, monkeypatch, flag):
+    if flag is None:
+        monkeypatch.delenv("VIDEO_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("VIDEO_ENABLED", flag)
+    d = client.get("/api/config").get_json()
+    assert d["fal_enabled"] is False and d["key_configured"] is True
+    for m in (MODELS[0], next(x for x in MODELS if x["mode"] == "i2v"), next(x for x in MODELS if x["mode"] == "t2i")):
+        b = body_for(m, "16:9", m.get("default_duration"), False, m.get("default_resolution"))
+        r = client.post("/api/generate", json=b)
+        assert r.status_code == 503 and r.get_json()["error"]["code"] == "video_disabled"
+    data = {"image": (io.BytesIO(b"\xff\xd8\xff" + b"0" * 1000), "s.jpg", "image/jpeg")}
+    r = client.post("/api/upload", data=data, content_type="multipart/form-data")
+    assert r.get_json()["error"]["code"] == "video_disabled"
+    assert fal.calls == []
+
+
+def test_video_enabled_lists_paid_image_models(client, fal):
+    d = client.get("/api/config").get_json()
+    assert d["fal_enabled"] is True
+    ids = {m["id"] for m in d["models"]}
+    assert {m["id"] for m in ALL_MODELS} == ids
+
+
+def test_free_model_not_accepted_by_fal_generate(client, fal):
+    r = client.post("/api/generate", json={"mode": "t2i", "model": "free-pollinations", "prompt": "abc def", "aspect": "16:9"})
+    assert r.get_json()["error"]["code"] == "bad_model"
+
+
+# ------------------------------------------------------------------ free images (Pollinations, mocked)
+JPEG = b"\xff\xd8\xff\xe0" + b"x" * 5000
+
+
+class PollResp:
+    def __init__(self, status, content=JPEG, ctype="image/jpeg", headers=None):
+        self.status_code = status
+        self.content = content
+        self.text = content.decode("latin1")
+        self.headers = {"Content-Type": ctype}
+        self.headers.update(headers or {})
+
+
+@pytest.fixture
+def poll(monkeypatch):
+    monkeypatch.delenv("FAL_KEY", raising=False)
+    monkeypatch.delenv("VIDEO_ENABLED", raising=False)
+    monkeypatch.delenv("APP_PASSWORD", raising=False)
+    monkeypatch.setattr(appmod.time, "sleep", lambda s: None)
+    appmod._hits.clear()
+    state = {"calls": [], "queue": []}
+
+    def fake_get(url, **kw):
+        state["calls"].append(url)
+        return state["queue"].pop(0) if state["queue"] else PollResp(200)
+    monkeypatch.setattr(appmod.requests, "get", fake_get)
+    return state
+
+
+@pytest.mark.parametrize("aspect,w,h", [("16:9", 1024, 576), ("9:16", 576, 1024)])
+def test_free_image_ok(client, poll, aspect, w, h):
+    r = client.post("/api/free-image", json={"prompt": "podcast host  with mic", "aspect": aspect})
+    assert r.status_code == 200, r.get_json()
+    d = r.get_json()
+    assert d["width"] == w and d["height"] == h and d["estimate"] == 0
+    out = d["outputs"][0]
+    assert out["type"] == "image" and out["url"].startswith("data:image/jpeg;base64,")
+    assert out["public_url"].startswith("https://image.pollinations.ai/prompt/podcast%20host%20with%20mic?")
+    assert ("width=%d&height=%d" % (w, h)) in poll["calls"][0]
+    assert "key" not in poll["calls"][0].lower()
+
+
+def test_free_image_works_without_any_key(client, poll):
+    assert client.get("/api/config").get_json()["fal_enabled"] is False
+    assert client.post("/api/free-image", json={"prompt": "a nice office", "aspect": "16:9"}).status_code == 200
+
+
+@pytest.mark.parametrize("queue,code,status", [
+    ([PollResp(402, b'{"error":"limit"}', "application/json", {"Retry-After": "40"})], "free_limit", 429),
+    ([PollResp(500, b"err", "text/plain"), PollResp(502, b"err", "text/plain")], "free_failed", 502),
+    ([PollResp(200, b"<html>oops</html>" * 100, "text/html")], "free_failed", 502),
+    ([PollResp(400, b'{"error":"Prompt blocked by safety filter"}', "application/json")], "content_policy", 422),
+])
+def test_free_image_errors(client, poll, queue, code, status):
+    poll["queue"] = list(queue)
+    r = client.post("/api/free-image", json={"prompt": "a nice office", "aspect": "16:9"})
+    assert r.status_code == status and r.get_json()["error"]["code"] == code, r.get_json()
+
+
+def test_free_image_retry_then_ok(client, poll):
+    poll["queue"] = [PollResp(503, b"busy", "text/plain")]
+    r = client.post("/api/free-image", json={"prompt": "a nice office", "aspect": "9:16"})
+    assert r.status_code == 200 and len(poll["calls"]) == 2
+
+
+def test_free_image_timeout(client, poll, monkeypatch):
+    def boom(url, **kw):
+        raise requests.Timeout()
+    monkeypatch.setattr(appmod.requests, "get", boom)
+    r = client.post("/api/free-image", json={"prompt": "a nice office", "aspect": "16:9"})
+    assert r.status_code == 504 and r.get_json()["error"]["code"] == "free_timeout"
+
+
+@pytest.mark.parametrize("body,code", [
+    ({"prompt": "hi", "aspect": "16:9"}, "short_prompt"),
+    ({"prompt": "x" * 1001, "aspect": "16:9"}, "long_prompt"),
+    ({"prompt": "a nice office", "aspect": "4:3"}, "bad_aspect"),
+])
+def test_free_image_validation(client, poll, body, code):
+    r = client.post("/api/free-image", json=body)
+    assert r.status_code == 400 and r.get_json()["error"]["code"] == code
+    assert poll["calls"] == []
+
+
+def test_free_image_rate_limit(client, poll):
+    codes = [client.post("/api/free-image", json={"prompt": "a nice office", "aspect": "16:9"}).status_code for _ in range(16)]
+    assert codes[:15] == [200] * 15 and codes[15] == 429
+
+
+def test_free_image_password_when_set(client, poll, monkeypatch):
+    monkeypatch.setenv("APP_PASSWORD", "pw1")
+    assert client.post("/api/free-image", json={"prompt": "a nice office", "aspect": "16:9"}).status_code == 401
+    assert client.post("/api/free-image", json={"prompt": "a nice office", "aspect": "16:9"}, headers={"X-App-Password": "pw1"}).status_code == 200

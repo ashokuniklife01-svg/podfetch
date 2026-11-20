@@ -141,7 +141,11 @@ MODELS = [
          price=_per_sec_by_res({"480p": 0.05, "720p": 0.10, "1080p": 0.15}),
          price_note="$0.05/s 480p, $0.10/s 720p, $0.15/s 1080p", build=_wan(i2v=True)),
 
-    # Prompt -> Image
+    # Prompt -> Image (FREE, no key: Pollinations classic API, handled in app.py)
+    dict(id="free-pollinations", mode="t2i", provider="pollinations", name="Free AI image (Pollinations)",
+         tag="Free · no credit needed", endpoint="image.pollinations.ai", price=_flat(0.0),
+         price_note="Free · 1024×576 (16:9) or 576×1024 (9:16)", build=None),
+    # Prompt -> Image (fal.ai, paid)
     dict(id="nano-banana", mode="t2i", name="Google Nano Banana", tag="Great all-rounder",
          endpoint="fal-ai/nano-banana", price=_flat(0.039), price_note="$0.039 per image",
          build=_img_aspect({"output_format": "png"})),
@@ -180,10 +184,16 @@ def options_grid(m):
     return out
 
 
-def public_catalogue():
+def public_catalogue(fal_enabled=True):
     res = []
     for m in MODELS:
+        is_fal = m.get("provider", "fal") == "fal"
+        # paid fal image models only appear when fal is switched on; video models are always
+        # listed (shown disabled in the UI) so people can see what's coming.
+        if is_fal and m["mode"] == "t2i" and not fal_enabled:
+            continue
         res.append({
+            "provider": m.get("provider", "fal"), "free": not is_fal,
             "id": m["id"], "mode": m["mode"], "name": m["name"], "tag": m.get("tag", ""),
             "endpoint": m["endpoint"],
             "durations": m.get("durations", []), "default_duration": m.get("default_duration"),

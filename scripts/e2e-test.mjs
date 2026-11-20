@@ -6,7 +6,7 @@ const browser = await chromium.launch();
 const ctx = await browser.newContext({ acceptDownloads: true });
 const page = await ctx.newPage();
 const errors = [];
-page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()} @ ${m.location()?.url}`); });
 page.on('pageerror', (e) => errors.push('[pageerror] ' + e.message));
 page.on('requestfailed', (r) => errors.push('[reqfail] ' + r.url() + ' ' + r.failure()?.errorText));
 page.on('response', (r) => { if (r.status() >= 400) errors.push('[http ' + r.status() + '] ' + r.url()); });
@@ -36,6 +36,35 @@ if (only === 'all' || only === 'cmp') {
       await dl('#cmp-dl', `cmp-${q}.mp4`);
     });
   }
+}
+if (only === 'all' || only === 'cmp2' || only === 'big' || only === 'noise') {
+  const q = async (file, preset, res, out) => t(`quality ${preset} ${res} ${file}`, async () => {
+    await page.click('.tab[data-tab=compress]'); await page.click('.mode[data-mode=quality]');
+    await page.setInputFiles('#cmp-file', T + file); await page.check(`input[name=cmp-q][value=${preset}]`, { force: true }); await page.selectOption('#cmp-res', res);
+    await page.click('#cmp-go'); await page.waitForSelector('#cmp-dl', { timeout: 900000 });
+    console.log('   stats:', (await page.textContent('#cmp-result .stats')).replace(/\s+/g, ' ')); await dl('#cmp-dl', out);
+  });
+  const tg = async (file, mb, out, to = 900000) => t(`target ${mb}MB ${file}`, async () => {
+    await page.click('.tab[data-tab=compress]'); await page.click('.mode[data-mode=target]');
+    await page.setInputFiles('#cmp-file', T + file); await page.fill('#cmp-target', String(mb));
+    await page.waitForFunction(() => /→/.test(document.querySelector('#cmp-plan').textContent), null, { timeout: 30000 });
+    console.log('   plan:', await page.textContent('#cmp-plan'));
+    await page.click('#cmp-go'); await page.waitForSelector('#cmp-dl', { timeout: to });
+    console.log('   stats:', (await page.textContent('#cmp-result .stats')).replace(/\s+/g, ' '));
+    const hint = await page.$('#cmp-result .hint'); if (hint) console.log('   note:', await hint.textContent());
+    await dl('#cmp-dl', out);
+  });
+  if (only === 'all' || only === 'cmp2') {
+    await q('test.mp4', 'lowest', '0', 'q-lowest.mp4');
+    await q('test.mp4', 'medium', '240', 'q-240.mp4');
+    await q('test.mp4', 'small', '144', 'q-144.mp4');
+    await q('vertical.mp4', 'medium', '480', 'q-vert480.mp4');
+    await tg('test.mp4', 2, 't-2mb.mp4');
+    await tg('vertical.mp4', 1, 't-vert1mb.mp4');
+    await t('target too small warning', async () => { await page.setInputFiles('#cmp-file', T + 'test.mp4'); await page.fill('#cmp-target', '0.03'); await page.waitForTimeout(500); console.log('   plan:', await page.textContent('#cmp-plan')); });
+  }
+  if (only === 'big') await tg('big200.mp4', 12, 't-big12.mp4', 1800000);
+  if (only === 'noise') await tg('noise.mp4', 1, 't-noise1.mp4', 900000);
 }
 if (only === 'all' || only === 'pdf') {
   await t('pdf 4 images + reorder + bad file', async () => {

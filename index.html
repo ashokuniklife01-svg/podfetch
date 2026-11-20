@@ -56,22 +56,46 @@
   <p class="sub">Make videos smaller for WhatsApp, email or upload — choose the quality you want.</p>
   <label class="drop" id="cmp-drop">
     <input type="file" id="cmp-file" accept="video/*,.mkv,.mov,.avi,.flv,.wmv,.3gp">
-    <div class="drop-inner"><div class="big">⬆️</div><b>Choose a video</b> or drag &amp; drop it here<small>Best under 500 MB</small></div>
+    <div class="drop-inner"><div class="big">⬆️</div><b>Choose a video</b> or drag &amp; drop it here<small>Big videos (200 MB+) supported</small></div>
   </label>
   <div class="fileinfo" id="cmp-info" hidden></div>
-  <div class="opts">
+  <div class="modes" role="tablist">
+    <button type="button" class="mode active" data-mode="quality">🎚️ By quality</button>
+    <button type="button" class="mode" data-mode="target">🎯 By target size (MB)</button>
+  </div>
+  <div class="opts" id="cmp-quality-opts">
     <div class="presets" id="cmp-presets">
       <label class="preset"><input type="radio" name="cmp-q" value="high"><span><b>High quality</b><small>Slightly smaller, looks the same</small></span></label>
       <label class="preset"><input type="radio" name="cmp-q" value="medium" checked><span><b>Medium</b><small>Good balance (recommended)</small></span></label>
-      <label class="preset"><input type="radio" name="cmp-q" value="small"><span><b>Smallest file</b><small>Maximum compression</small></span></label>
+      <label class="preset"><input type="radio" name="cmp-q" value="small"><span><b>Small file</b><small>Strong compression</small></span></label>
+      <label class="preset"><input type="radio" name="cmp-q" value="lowest"><span><b>Lowest</b><small>Maximum compression, tiny file</small></span></label>
     </div>
+  </div>
+  <div class="opts" id="cmp-target-opts" hidden>
+    <div class="chips" id="cmp-chips">
+      <button type="button" class="chip" data-mb="5">5 MB</button>
+      <button type="button" class="chip" data-mb="10">10 MB</button>
+      <button type="button" class="chip active" data-mb="12">12 MB</button>
+      <button type="button" class="chip" data-mb="16">16 MB</button>
+      <button type="button" class="chip" data-mb="25">25 MB</button>
+      <button type="button" class="chip" data-mb="50">50 MB</button>
+    </div>
+    <label>Target size (MB)
+      <input type="number" id="cmp-target" value="12" min="0.5" max="2000" step="0.5" inputmode="decimal">
+    </label>
+    <div class="fileinfo" id="cmp-plan" hidden></div>
+  </div>
+  <div class="opts">
     <label>Max resolution
       <select id="cmp-res">
+        <option value="auto" id="cmp-res-auto" hidden>Auto (best for the size)</option>
         <option value="0">Keep original</option>
         <option value="1080">1080p</option>
         <option value="720" selected>720p</option>
         <option value="480">480p</option>
         <option value="360">360p</option>
+        <option value="240">240p</option>
+        <option value="144">144p</option>
       </select>
     </label>
   </div>

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UNIK AI Studio · Prompt to Video, Image to Video, Prompt to Image</title>
+<meta name="description" content="Make AI videos and images from a prompt or a photo, in 16:9 for YouTube or 9:16 for Reels and Shorts.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><img src="favicon.svg" alt="" width="34" height="34"><span>UNIK <b>AI Studio</b></span></div>
+  <p class="tag">Type an idea, get a video or image · 16:9 for YouTube · 9:16 for Reels &amp; Shorts</p>
+</header>
+
+<div id="banner" class="banner" hidden></div>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-mode="t2v" role="tab" aria-selected="true"><span class="ico">🎬</span>Prompt to Video</button>
+  <button class="tab" data-mode="t2i" role="tab" aria-selected="false"><span class="ico">🖼️</span>Prompt to Image</button>
+  <button class="tab" data-mode="i2v" role="tab" aria-selected="false"><span class="ico">✨</span>Image to Video</button>
+</nav>
+
+<main>
+  <section class="panel" id="studio">
+    <form id="form" autocomplete="off" novalidate>
+      <div id="imgBox" class="field" hidden>
+        <span class="lbl">Starting image</span>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept="image/jpeg,image/png,image/webp">
+          <div class="drop-inner" id="dropInner"><div class="big">📷</div><b>Tap to choose a photo</b> or drop it here<small>JPG, PNG or WEBP · it's cropped to the shape you pick below</small></div>
+          <canvas id="preview" hidden></canvas>
+        </label>
+        <button type="button" class="link" id="clearImg" hidden>Remove image</button>
+      </div>
+
+      <label class="field">
+        <span class="lbl" id="promptLbl">Describe your video</span>
+        <textarea id="prompt" rows="4" maxlength="2000" placeholder="A confident Indian entrepreneur walks into a modern glass office at sunrise, cinematic, slow camera push-in"></textarea>
+        <span class="count"><span id="pcount">0</span>/2000</span>
+      </label>
+
+      <div class="field">
+        <span class="lbl">Shape</span>
+        <div class="seg" id="aspectSeg">
+          <button type="button" class="segbtn active" data-aspect="16:9"><i class="ar ar169"></i><span>16:9<small>YouTube</small></span></button>
+          <button type="button" class="segbtn" data-aspect="9:16"><i class="ar ar916"></i><span>9:16<small>Reels · Shorts</small></span></button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="lbl">AI model</span>
+        <select id="model"></select>
+        <span class="hint" id="modelNote"></span>
+      </label>
+
+      <div class="row">
+        <div class="field" id="durBox">
+          <span class="lbl">Length</span>
+          <div class="chips" id="durChips"></div>
+        </div>
+        <div class="field" id="resBox">
+          <span class="lbl">Quality</span>
+          <div class="chips" id="resChips"></div>
+        </div>
+        <div class="field" id="audioBox">
+          <span class="lbl">Sound</span>
+          <label class="switch"><input type="checkbox" id="audio" checked><span class="slider"></span><span class="swtxt" id="audioTxt">On</span></label>
+        </div>
+      </div>
+
+      <details class="more">
+        <summary>More options</summary>
+        <label class="field"><span class="lbl">Avoid (negative prompt, optional)</span>
+          <input type="text" id="negative" maxlength="500" placeholder="blurry, text, watermark"></label>
+      </details>
+
+      <div class="actions">
+        <button type="submit" class="btn primary" id="go"><span>✨ Generate</span><span class="cost" id="cost"></span></button>
+      </div>
+      <p class="hint small">Prices are approximate fal.ai rates and are charged to your fal.ai account.</p>
+      <div id="formMsg" class="msg error" role="alert" hidden></div>
+    </form>
+  </section>
+
+  <section id="jobs" class="jobs" aria-live="polite"></section>
+
+  <section class="gallery-wrap">
+    <div class="ghead"><h2>Your creations</h2><button class="link" id="clearGallery" type="button">Clear list</button></div>
+    <p class="hint small">Saved on this device. Download anything you want to keep: fal.ai links can expire.</p>
+    <div id="gallery" class="gallery"></div>
+    <p id="emptyGallery" class="empty">Nothing yet. Your videos and images will show up here.</p>
+  </section>
+</main>
+
+<div id="lock" class="lock" hidden>
+  <form class="lockcard" id="lockForm">
+    <div class="big">🔒</div>
+    <h2>Studio password</h2>
+    <p class="hint">This studio is private. Enter the password to continue.</p>
+    <input type="password" id="pw" placeholder="Password" autocomplete="current-password">
+    <button class="btn primary" type="submit">Unlock</button>
+    <div id="lockMsg" class="msg error" hidden></div>
+  </form>
+</div>
+
+<footer class="foot">UNIK AI Studio · powered by fal.ai models (Google Veo, Kling, Wan, Nano Banana, Seedream, FLUX)</footer>
+<script src="app.js"></script>
+</body>
+</html>

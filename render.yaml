@@ -1,0 +1,17 @@
+services:
+  - type: web
+    runtime: static
+    name: ubm17
+    branch: ubm17
+    buildCommand: sed -i "s#__BASE__#${RENDER_EXTERNAL_URL}#g" index.html
+    staticPublishPath: .
+    headers:
+      - path: /v/*
+        name: Cache-Control
+        value: public, max-age=2592000, immutable
+      - path: /p/*
+        name: Cache-Control
+        value: public, max-age=2592000, immutable
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex

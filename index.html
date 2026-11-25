@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FFF8EC">
+<meta name="robots" content="noindex,nofollow">
+<title>UBM Batch 17</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="UBM Batch 17">
+<meta property="og:image" content="__BASE__/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" as="image" href="p/reel-05.jpg">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--bg:#FFF8EC;--card:#fff;--gold:#B8860B;--gold2:#E6B84A;--soft:#FFF3C4;--ink:#2A1A00}
+html,body{background:var(--bg)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--ink);min-height:100vh;
+background:radial-gradient(120% 60% at 50% 0%,#FFF3C4 0%,rgba(255,243,196,0) 70%),var(--bg)}
+.wrap{max-width:430px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:center;gap:10px;padding:6px 0 18px}
+.badge{font-weight:800;letter-spacing:.14em;font-size:15px;color:#fff;padding:7px 13px;border-radius:999px;
+background:linear-gradient(135deg,var(--gold2),var(--gold));box-shadow:0 6px 16px rgba(184,134,11,.28)}
+.batch{font-weight:700;font-size:15px;letter-spacing:.04em;color:var(--gold)}
+.feed{display:grid;gap:16px}
+.card{position:relative;aspect-ratio:9/16;border-radius:22px;overflow:hidden;background:#F5ECD8;
+box-shadow:0 10px 30px rgba(122,79,4,.12),0 1px 0 rgba(255,255,255,.8) inset;border:1px solid #F1E3C0;
+transform:translateZ(0);opacity:0;translate:0 14px;transition:opacity .5s ease,translate .5s ease}
+.card.in{opacity:1;translate:0 0}
+.card img,.card video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.card video{background:#000}
+.cover{position:absolute;inset:0;border:0;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.cover::after{content:"";position:absolute;inset:auto 0 0 0;height:30%;background:linear-gradient(transparent,rgba(42,26,0,.28))}
+.play{position:relative;z-index:1;width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.92);
+display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.18);transition:transform .2s}
+.cover:active .play{transform:scale(.92)}
+.play svg{width:28px;height:28px;margin-left:4px;fill:var(--gold)}
+.dur{position:absolute;z-index:1;right:12px;bottom:12px;font-size:12px;font-weight:700;color:var(--ink);
+background:rgba(255,255,255,.9);padding:4px 9px;border-radius:999px}
+.card.playing .cover{display:none}
+.spin{position:absolute;z-index:2;left:50%;top:50%;width:44px;height:44px;margin:-22px;border-radius:50%;
+border:3px solid rgba(255,255,255,.5);border-top-color:#fff;animation:s 1s linear infinite;display:none}
+.card.loading .spin{display:block}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (min-width:600px){.wrap{padding-top:32px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><span class="badge">UBM</span><span class="batch">Batch 17</span></header>
+<main class="feed" id="feed"></main>
+</div>
+<script>
+var V=[["reel-05",35],["reel-06",26],["reel-48",46],["d2-reel-06",62],["reel-31",76],["reel-25",120],["reel-233",138]];
+var feed=document.getElementById('feed'),cur=null;
+function t(s){return Math.floor(s/60)+":"+("0"+s%60).slice(-2)}
+V.forEach(function(v,i){
+ var c=document.createElement('div');c.className='card';
+ c.innerHTML='<img src="p/'+v[0]+'.jpg" alt="" '+(i>1?'loading="lazy" ':'')+'decoding="async"><button class="cover" aria-label="Play"><span class="play"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z"/></svg></span><span class="dur">'+t(v[1])+'</span></button><span class="spin"></span>';
+ c.querySelector('.cover').onclick=function(){play(c,v[0])};
+ feed.appendChild(c);
+});
+function play(c,id){
+ var vid=c.querySelector('video');
+ if(!vid){
+  vid=document.createElement('video');
+  vid.setAttribute('playsinline','');vid.setAttribute('webkit-playsinline','');
+  vid.controls=true;vid.preload='auto';vid.poster='p/'+id+'.jpg';
+  vid.setAttribute('controlsList','nodownload noplaybackrate');vid.disablePictureInPicture=true;
+  vid.src='v/'+id+'.mp4';
+  vid.addEventListener('waiting',function(){c.classList.add('loading')});
+  vid.addEventListener('playing',function(){c.classList.remove('loading')});
+  vid.addEventListener('play',function(){if(cur&&cur!==vid)cur.pause();cur=vid});
+  vid.addEventListener('ended',function(){var n=c.nextElementSibling;if(n)n.scrollIntoView({behavior:'smooth',block:'center'})});
+  c.insertBefore(vid,c.querySelector('.cover'));
+ }
+ c.classList.add('playing','loading');
+ var p=vid.play();if(p&&p.catch)p.catch(function(){c.classList.remove('loading')});
+}
+var io='IntersectionObserver' in window?new IntersectionObserver(function(es){es.forEach(function(e){
+ if(e.isIntersecting)e.target.classList.add('in');
+ else{var v=e.target.querySelector('video');if(v&&!v.paused&&e.intersectionRatio===0)v.pause()}
+})},{threshold:[0,.15]}):null;
+document.querySelectorAll('.card').forEach(function(c){io?io.observe(c):c.classList.add('in')});
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Queue · UNIK Post{% endblock %}
+{% block main %}
+<div class="page-h">
+  <h1>Queue</h1>
+  <a class="btn btn-sm" href="/">{{ ic('plus') }}New post</a>
+</div>
+<div class="seg sm filters" id="filters">
+  <button data-f="all" class="on">All</button>
+  <button data-f="active">In progress</button>
+  <button data-f="scheduled">Scheduled</button>
+  <button data-f="published">Published</button>
+  <button data-f="failed">Failed</button>
+</div>
+<div class="qlist" id="qlist"></div>
+<div class="card empty hidden" id="qempty">
+  <div class="empty-ic">{{ ic('queue') }}</div>
+  <b>Nothing here yet</b>
+  Your posts and schedules show up here.
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='queue.js') }}?v=1"></script>{% endblock %}

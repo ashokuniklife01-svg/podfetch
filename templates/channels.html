@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Channels · UNIK Post{% endblock %}
+{% block main %}
+{% set all_ok = setup.google and setup.meta and setup.persistent and setup.cron %}
+<div class="page-h"><h1>Channels</h1></div>
+
+<section class="card setup {{ '' if not all_ok else 'closed' }}" id="setup">
+  <div class="setup-h" data-toggle="setup">
+    <span class="pf">{{ ic('info') }}</span>
+    <b>Setup</b>
+    {% if all_ok %}<span class="pill ok"><span class="dot"></span>All set</span>{% else %}<span class="pill warn"><span class="dot"></span>Needs attention</span>{% endif %}
+    {{ ic('chev', 'chev') }}
+  </div>
+  <div class="setup-b {{ 'hidden' if all_ok }}" id="setupBody">
+    {% macro chk(ok, title, sub, optional=false) %}<div class="chk"><span class="i {{ 'y' if ok else ('o' if optional else 'n') }}">{{ ic('check' if ok else ('info' if optional else 'alert')) }}</span><div><b>{{ title }}</b><small>{{ sub }}</small>{{ caller() if caller }}</div></div>{% endmacro %}
+    {% call chk(setup.google, 'YouTube app keys', 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET' if not setup.google else 'Connected to Google') %}
+      <div class="code"><span>{{ setup.google_cb }}</span><button data-copy="{{ setup.google_cb }}">Copy</button></div>{% endcall %}
+    {% call chk(setup.meta, 'Facebook & Instagram app keys', 'META_APP_ID and META_APP_SECRET' if not setup.meta else 'Connected to Meta') %}
+      <div class="code"><span>{{ setup.meta_cb }}</span><button data-copy="{{ setup.meta_cb }}">Copy</button></div>{% endcall %}
+    {% call chk(setup.ig, 'Instagram Login (optional)', 'INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET · connects Instagram accounts that have no Facebook Page' if not setup.ig else 'Each Instagram account connects on its own', true) %}
+      <div class="code"><span>{{ setup.ig_cb }}</span><button data-copy="{{ setup.ig_cb }}">Copy</button></div>{% endcall %}
+    {{ chk(setup.persistent, 'Saved storage', 'Add DATABASE_URL so connections survive restarts' if not setup.persistent else 'Database connected') }}
+    {{ chk(setup.cron, 'Scheduler ping', 'Set CRON_TOKEN and ping /cron/run every 10 min' if not setup.cron else 'Ready for /cron/run') }}
+  </div>
+</section>
+
+{% if discovered %}
+<section class="card cgroup found">
+  <div class="cgroup-h"><span class="pf">{{ ic('plus') }}</span><b>Also found in your Facebook login</b></div>
+  {% for d in discovered %}
+  <div class="crow">
+    <span class="avatar">{% if d.avatar_url %}<img src="{{ d.avatar_url }}" alt="">{% else %}{{ (d.name or d.handle or '?')[:1]|upper }}{% endif %}<span class="badge">{{ ic(d.platform) }}</span></span>
+    <div class="who"><b>{{ d.name or d.handle }}</b><small>{{ PLATFORM_NAMES[d.platform] }}{% if d.handle %} · @{{ d.handle }}{% endif %}</small></div>
+    <form method="post" action="/channels/discovered/{{ d.id }}/add"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><button class="btn btn-sm btn-dark">{{ ic('plus') }}Add</button></form>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% for p, rows in groups.items() %}
+<section class="card cgroup" data-platform="{{ p }}">
+  <div class="cgroup-h">
+    <span class="pf">{{ ic(p) }}</span><b>{{ PLATFORM_NAMES[p] }}</b><span class="count">{{ rows|length }}</span>
+    <span class="sp"></span>
+    {% if p != 'youtube' and meta_ready %}<a class="btn btn-sm btn-ghost" href="/connect/new/facebook" title="One Facebook login connects all your Pages and Instagram accounts">{{ ic('refresh') }}<span class="btn-label">Sync</span></a>{% endif %}
+    <button class="btn btn-sm" data-add="{{ p }}">{{ ic('plus') }}<span class="btn-label">Add</span></button>
+  </div>
+  {% for c in rows %}
+  <div class="crow" data-id="{{ c.id }}" data-name="{{ c.name }}" data-handle="{{ c.handle or '' }}" data-platform="{{ p }}">
+    <span class="avatar">{% if c.avatar_url %}<img src="{{ c.avatar_url }}" alt="">{% else %}{{ c.name[:1]|upper }}{% endif %}<span class="badge">{{ ic(p) }}</span></span>
+    <div class="who"><b>{{ c.name }}</b>
+      <small>{% if c.status == 'connected' %}{% if c.remote_name and c.remote_name != c.name %}Connected as {{ c.remote_name }}{% elif c.handle %}@{{ c.handle }}{% else %}Connected{% endif %}{% elif c.status == 'error' %}{{ c.status_detail or 'Reconnect needed' }}{% else %}{% if c.handle %}@{{ c.handle }} · {% endif %}Not connected{% endif %}</small></div>
+    <div class="acts">
+      {% if c.status == 'connected' %}<span class="pill ok"><span class="dot"></span>Live</span>
+      {% elif c.status == 'error' %}<span class="pill err"><span class="dot"></span>Error</span>{% endif %}
+      {% if not ready[p] %}<span class="btn btn-sm btn-muted" aria-disabled="true" title="Add the app keys on the server first">Setup needed</span>
+      {% elif c.status == 'connected' %}<a class="btn btn-sm btn-ghost" href="/connect/{{ c.id }}" title="Reconnect">{{ ic('refresh') }}<span class="btn-label">Reconnect</span></a>
+      {% else %}<a class="btn btn-sm btn-dark" href="/connect/{{ c.id }}">{{ 'Reconnect' if c.status == 'error' else 'Connect' }}</a>{% endif %}
+      <div class="menu"><button class="icon-btn" data-menu aria-label="More">{{ ic('more') }}</button>
+        <div class="menu-pop hidden">
+          <button data-act="rename">{{ ic('edit') }}Rename</button>
+          {% if c.status != 'disconnected' %}<button data-act="disconnect">{{ ic('unlink') }}Disconnect</button>{% endif %}
+          <button data-act="remove" class="danger">{{ ic('trash') }}Remove</button>
+        </div></div>
+    </div>
+  </div>
+  {% else %}
+  <div class="crow"><div class="who"><small>No accounts yet</small></div></div>
+  {% endfor %}
+</section>
+{% endfor %}
+
+<dialog id="dlgEdit"><form method="post" class="dlg" id="formEdit">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="platform" id="editPlatform">
+  <h3 id="editTitle">Rename</h3><p id="editSub">Only changes the name shown here.</p>
+  <label class="field"><div class="field-top"><span class="label">Name</span></div><input class="input" name="name" id="editName" maxlength="120"></label>
+  <label class="field" id="editHandleWrap"><div class="field-top"><span class="label" id="editHandleLabel">Handle or link</span></div><input class="input" name="handle" id="editHandle" maxlength="200" placeholder="@handle or profile link"></label>
+  <div class="dlg-acts"><button type="button" class="btn" data-close>Cancel</button><button class="btn btn-dark" id="editSave">Save</button></div>
+</form></dialog>
+<dialog id="dlgConfirm"><form method="post" class="dlg" id="formConfirm">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <h3 id="confTitle">Remove?</h3><p id="confSub"></p>
+  <div class="dlg-acts"><button type="button" class="btn" data-close>Cancel</button><button class="btn btn-dark" id="confBtn">Remove</button></div>
+</form></dialog>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='channels.js') }}?v=1"></script>{% endblock %}

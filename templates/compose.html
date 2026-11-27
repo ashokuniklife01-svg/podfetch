@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Compose · UNIK Post{% endblock %}
+{% block main %}
+<script type="application/json" id="boot">{{ data|tojson }}</script>
+<div class="page-h">
+  <h1>New post</h1>
+  <div class="seg" id="types" role="tablist">
+    <button data-type="video" class="on">{{ ic('video') }}Video</button>
+    <button data-type="photo">{{ ic('image') }}Photo</button>
+    <button data-type="text">{{ ic('text') }}Text</button>
+  </div>
+</div>
+<div class="compose">
+  <div class="col-left">
+    <section class="card card-pad sec" id="mediaCard">
+      <label class="drop" id="drop">
+        <input type="file" id="file" class="sr" accept="video/*">
+        <div class="drop-ic">{{ ic('upload') }}</div>
+        <b id="dropTitle">Add video</b>
+        <span id="dropSub">Drop here or tap to choose · original quality</span>
+      </label>
+      <div id="mediaView" class="hidden"></div>
+    </section>
+    <section class="card card-pad sec">
+      <div class="sec-h"><h2>Post to</h2><span class="count" id="selCount"></span></div>
+      <div id="accounts"></div>
+    </section>
+  </div>
+  <div class="col-right">
+    <div class="card quick hidden" id="quick">
+      <span class="label">{{ ic('cal') }}Same time for all</span>
+      <input class="input" type="datetime-local" id="quickAt" aria-label="Schedule time for all">
+      <button class="btn btn-sm" id="quickApply">Apply</button>
+      <button class="btn btn-sm btn-ghost" id="quickNow">All now</button>
+    </div>
+    <div class="dests" id="dests"></div>
+    <div class="card empty" id="destEmpty">
+      <div class="empty-ic">{{ ic('send') }}</div>
+      <b>Pick where to post</b>
+      Each account gets its own title and time.
+    </div>
+  </div>
+</div>
+<div class="foot"><div class="foot-in">
+  <div class="foot-sum" id="sum">Add media and pick accounts</div>
+  <button class="btn btn-dark btn-lg" id="postBtn" disabled>Post</button>
+</div></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='compose.js') }}?v=1"></script>{% endblock %}

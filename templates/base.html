@@ -1,0 +1,40 @@
+{% from "_macros.html" import ic %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#ffffff">
+<title>{% block title %}UNIK Post{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=1">
+</head>
+<body data-csrf="{{ csrf_token() }}">
+{% include "_sprite.html" %}
+{% block body %}
+<header class="top"><div class="top-in">
+  <a class="brand" href="/"><span class="brand-mark">U</span><span>UNIK <small>Post</small></span></a>
+  <nav class="tabs">
+    <a class="tab {{ 'on' if active=='compose' }}" href="/">{{ ic('compose') }}Compose</a>
+    <a class="tab {{ 'on' if active=='queue' }}" href="/queue">{{ ic('queue') }}Queue</a>
+    <a class="tab {{ 'on' if active=='channels' }}" href="/channels">{{ ic('channels') }}Channels</a>
+  </nav>
+  <div class="top-right">
+    <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="icon-btn" title="Sign out" aria-label="Sign out">{{ ic('logout') }}</button></form>
+  </div>
+</div></header>
+{% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}
+<div class="toasts" id="toasts">{% for cat, m in msgs %}<div class="toast {{ cat }}">{{ m }}</div>{% endfor %}</div>
+{% endif %}{% endwith %}
+<main class="wrap">{% block main %}{% endblock %}</main>
+<nav class="bnav">
+  <a class="{{ 'on' if active=='compose' }}" href="/">{{ ic('compose') }}Compose</a>
+  <a class="{{ 'on' if active=='queue' }}" href="/queue">{{ ic('queue') }}Queue</a>
+  <a class="{{ 'on' if active=='channels' }}" href="/channels">{{ ic('channels') }}Channels</a>
+</nav>
+{% endblock %}
+<script src="{{ url_for('static', filename='common.js') }}?v=1"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

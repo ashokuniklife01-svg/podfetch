@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Sign in · UNIK Post{% endblock %}
+{% block body %}
+<div class="login-wrap"><div class="login">
+  <div class="brand-mark">U</div>
+  <h1>UNIK Post</h1>
+  <p>One upload. Every channel.</p>
+  <form method="post" class="card card-pad" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    {% if error %}<div class="alert err">{{ error }}</div>{% endif %}
+    <label class="field"><div class="field-top"><span class="label">Password</span></div>
+      <input class="input" type="password" name="password" autocomplete="current-password" required autofocus></label>
+    <button class="btn btn-dark btn-lg">Sign in</button>
+  </form>
+</div></div>
+{% endblock %}

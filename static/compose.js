@@ -219,7 +219,7 @@
       list.forEach(function (c) {
         var on = S.selected.indexOf(c.id) >= 0, connected = c.status === "connected";
         var sub = connected ? (c.handle ? "@" + c.handle : "Connected") : (c.status === "error" ? "Reconnect needed" : "Not connected");
-        var av = el("span", { class: "avatar" }, [c.avatar ? el("img", { src: c.avatar, alt: "" }) : (c.name || "?").charAt(0).toUpperCase()]);
+        var av = el("span", { class: "avatar" }, [c.avatar ? el("img", { src: c.avatar, alt: "" }) : (c.name || "?").charAt(0).toUpperCase(), el("span", { class: "badge" }, [ic(c.platform)])]);
         var b = el(connected ? "button" : "div", { type: connected ? "button" : null, class: "acc" + (on ? " on" : "") + (connected ? "" : " off"), "aria-pressed": on ? "true" : "false" }, [
           av, el("span", { class: "acc-n" }, [el("b", { text: c.name }), el("small", { text: sub })]),
           connected ? el("span", { class: "check" }, [ic("check")]) : el("a", { class: "link", href: "/channels", text: "Connect" })

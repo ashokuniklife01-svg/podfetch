@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#ffffff">
 <title>{% block title %}UNIK Post{% endblock %}</title>
 <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
-<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v=2">
 </head>
 <body data-csrf="{{ csrf_token() }}">
 {% include "_sprite.html" %}
@@ -34,7 +34,7 @@
   <a class="{{ 'on' if active=='channels' }}" href="/channels">{{ ic('channels') }}Channels</a>
 </nav>
 {% endblock %}
-<script src="{{ url_for('static', filename='common.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='common.js') }}?v=2"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
